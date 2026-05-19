@@ -291,7 +291,7 @@ export default function ExplorePage() {
           </div>
         </div>
       )}
-1
+
       {/* Sin resultados */}
       {query && filteredArtists.length === 0 && filteredArtworks.length === 0 && filteredProjects.length === 0 && (
         <div className="text-center py-16">

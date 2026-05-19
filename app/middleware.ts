@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rutas públicas — no requieren sesión
-  const publicRoutes = ['/login', '/register', '/forgot-password']
+  const publicRoutes = ['/login', '/register', '/forgot-password', '/terms', '/privacy']
   const isPublicRoute = publicRoutes.includes(pathname)
 
   // Si no hay sesión y la ruta es privada → redirigir al login
