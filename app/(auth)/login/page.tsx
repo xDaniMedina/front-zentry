@@ -1,5 +1,9 @@
+'use client'
+
+import { use } from 'react'
 import Link from 'next/link'
 import { Mail, Lock, Sparkles } from 'lucide-react'
+import { motion, Variants } from 'framer-motion'
 import { login } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,129 +13,180 @@ interface LoginPageProps {
   searchParams: Promise<{ error?: string }>
 }
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const params = await searchParams
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.1 }
+  }
+}
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+}
+
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  // En Client Components, desenvolvemos la promesa de searchParams con React.use()
+  const params = use(searchParams)
   const error = params.error
 
   return (
-    <main className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-zentry-bg flex items-center justify-center p-4 transition-colors duration-300 overflow-hidden">
 
-      {/* Fondo decorativo */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-violet-600/5 rounded-full blur-3xl" />
-      </div>
+      {/* Fondo decorativo animado */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 1.5, ease: "easeOut" }}
+        className="absolute inset-0 overflow-hidden pointer-events-none"
+      >
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-zentry-accent/10 rounded-full blur-3xl" />
+      </motion.div>
 
-      <div className="w-full max-w-md relative">
+      <div className="w-full max-w-md relative z-10">
 
         {/* Logo */}
-        <div className="text-center mb-8">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-8"
+        >
           <div className="inline-flex items-center justify-center gap-2 mb-4">
-            <Sparkles className="w-6 h-6 text-violet-400" />
-            <span className="text-2xl font-bold text-white tracking-tight">
+            <Sparkles className="w-6 h-6 text-zentry-accent" />
+            <span className="text-2xl font-bold text-zentry-text-1 tracking-tight">
               Zentry
             </span>
           </div>
-          <p className="text-zinc-400 text-sm">
+          <p className="text-zentry-text-2 text-sm">
             Bienvenido de vuelta, artista
           </p>
-        </div>
+        </motion.div>
 
         {/* Card */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
-
-          <h1 className="text-xl font-semibold text-white mb-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="bg-zentry-card border border-zentry-border rounded-2xl p-8 shadow-2xl shadow-black/10 transition-colors duration-300"
+        >
+          <h1 className="text-xl font-semibold text-zentry-text-1 mb-6">
             Inicia sesión
           </h1>
 
           {/* Error */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl p-3 mb-6">
+            <motion.div 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl p-3 mb-6"
+            >
               {decodeURIComponent(error)}
-            </div>
+            </motion.div>
           )}
 
-          {/* Formulario */}
-          <form action={login} className="space-y-4">
-
-            <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-zinc-300 text-sm">
+          {/* Formulario Animado */}
+          <motion.form 
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+            action={login} 
+            className="space-y-4"
+          >
+            <motion.div variants={itemVariants} className="space-y-1.5">
+              <Label htmlFor="email" className="text-zentry-text-2 text-sm">
                 Correo electrónico
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zentry-text-2/70" />
                 <Input
                   id="email"
                   name="email"
                   type="email"
                   required
                   placeholder="tu@email.com"
-                  className="pl-10 bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-violet-500 focus:ring-violet-500/20 rounded-xl"
+                  className="pl-10 bg-zentry-bg border-zentry-border text-zentry-text-1 placeholder:text-zentry-text-2/50 focus:border-zentry-accent focus:ring-zentry-accent/20 rounded-xl transition-colors"
                 />
               </div>
-            </div>
+            </motion.div>
 
-            <div className="space-y-1.5">
+            <motion.div variants={itemVariants} className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-zinc-300 text-sm">
+                <Label htmlFor="password" className="text-zentry-text-2 text-sm">
                   Contraseña
                 </Label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs text-zinc-500 hover:text-violet-400 transition-colors"
+                  className="text-xs text-zentry-text-2/80 hover:text-zentry-accent transition-colors"
                 >
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zentry-text-2/70" />
                 <Input
                   id="password"
                   name="password"
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="pl-10 bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-violet-500 focus:ring-violet-500/20 rounded-xl"
+                  className="pl-10 bg-zentry-bg border-zentry-border text-zentry-text-1 placeholder:text-zentry-text-2/50 focus:border-zentry-accent focus:ring-zentry-accent/20 rounded-xl transition-colors"
                 />
               </div>
-            </div>
+            </motion.div>
 
-            <Button
-              type="submit"
-              className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl py-2.5 transition-all duration-200 mt-2"
-            >
-              Iniciar sesión
-            </Button>
+            <motion.div variants={itemVariants} className="pt-2">
+              <Button
+                type="submit"
+                className="w-full bg-zentry-accent hover:opacity-90 text-white font-semibold rounded-xl py-2.5 transition-all duration-200"
+              >
+                Iniciar sesión
+              </Button>
+            </motion.div>
+          </motion.form>
 
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-zinc-800" />
-            <span className="text-zinc-600 text-xs">o</span>
-            <div className="flex-1 h-px bg-zinc-800" />
-          </div>
+          {/* Divider animado */}
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            transition={{ delay: 0.5 }} 
+            className="flex items-center gap-3 my-6"
+          >
+            <div className="flex-1 h-px bg-zentry-border" />
+            <span className="text-zentry-text-2 text-xs">o</span>
+            <div className="flex-1 h-px bg-zentry-border" />
+          </motion.div>
 
           {/* Link a registro */}
-          <p className="text-center text-zinc-500 text-sm">
+          <motion.p 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            transition={{ delay: 0.6 }}
+            className="text-center text-zentry-text-2 text-sm"
+          >
             ¿No tienes cuenta?{' '}
             <Link
               href="/register"
-              className="text-violet-400 hover:text-violet-300 font-medium transition-colors"
+              className="text-zentry-accent hover:opacity-80 font-medium transition-colors"
             >
               Regístrate gratis
             </Link>
-          </p>
-
-        </div>
+          </motion.p>
+        </motion.div>
 
         {/* Footer */}
-        <p className="text-center text-zinc-600 text-xs mt-6">
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="text-center text-zentry-text-2/70 text-xs mt-6"
+        >
           Al continuar aceptas nuestros{' '}
-          <Link href="/terms" className="hover:text-zinc-400 transition-colors">
+          <Link href="/terms" className="hover:text-zentry-text-1 transition-colors">
             Términos de uso
           </Link>
-        </p>
-
+        </motion.p>
       </div>
     </main>
   )

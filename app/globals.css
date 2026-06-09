@@ -1,60 +1,92 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-
+/*
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  /* Colores base de Zentry */
-  --background: 0 0% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 0 0% 6%;
-  --card-foreground: 0 0% 98%;
-  --popover: 0 0% 6%;
-  --popover-foreground: 0 0% 98%;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+*/
 
-  /* Violeta — color de acento principal */
-  --primary: 262 80% 60%;
-  --primary-foreground: 0 0% 98%;
-
-  --secondary: 0 0% 12%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 0 0% 60%;
-  --accent: 262 80% 60%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 14%;
-  --input: 0 0% 14%;
-  --ring: 262 80% 60%;
-  --radius: 0.75rem;
+@theme {
+  --color-zentry-bg: var(--bg-app);
+  --color-zentry-card: var(--bg-card);
+  --color-zentry-sidebar: var(--bg-sidebar);
+  --color-zentry-text-1: var(--text-primary);
+  --color-zentry-text-2: var(--text-secondary);
+  --color-zentry-accent: var(--accent);
+  --color-zentry-border: var(--border);
+  
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
 }
 
-* {
-  border-color: hsl(var(--border));
+
+/* (LIGHT MODE) */
+:root {
+  --bg-app: #f4f6f8;
+  --bg-card: #ffffff;
+  --bg-sidebar: #fbfcfd;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --accent: #3b82f6; /* Azul estándar */
+  --border: #e5e7eb;
+}
+
+/* DARK MODE */
+.dark {
+  --bg-app: #0d1117;
+  --bg-card: #161b22;
+  --bg-sidebar: #010409;
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --accent: #a855f7; /* Morado para el dark */
+  --border: #30363d;
+}
+
+/*  ZENTRY ESPECIAL */
+.theme-special {
+  --bg-app: #050a14;
+  --bg-card: #0c1421;
+  --bg-sidebar: #080f1a;
+  --text-primary: #e6edf3;
+  --text-secondary: #90a0b2;
+  --accent: #2dd4bf; /* Teal/Azul verdoso para el especial */
+  --border: #1d2b3e;
 }
 
 body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: var(--font-geist-sans), sans-serif;
-  -webkit-font-smoothing: antialiased;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  border-color: var(--border);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Scrollbar personalizado */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: hsl(var(--background));
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 3px;
+  background: #2dd4bf;
+  border-radius: 6px;
+}
+.theme-special ::webkit-scrollbar-thumb {
+    background: #a855f7;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+/* Estilos básicos para las tarjetas que se aplicarán globalmente */
+[class*='bg-card'] {
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
+
+@import "tailwindcss";
+

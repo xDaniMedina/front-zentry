@@ -22,10 +22,10 @@ export default function FeedSearch() {
 
   return (
     <div className="relative">
-      <div className={`bg-zinc-900 border rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors ${
-        focused ? 'border-violet-500' : 'border-zinc-800'
+      <div className={`bg-zentry-card border rounded-2xl px-4 py-3 flex items-center gap-3 transition-all duration-300 shadow-sm ${
+        focused ? 'border-zentry-accent ring-1 ring-zentry-accent/50' : 'border-zentry-border hover:border-zentry-border/80'
       }`}>
-        <Search className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+        <Search className="w-4 h-4 text-zentry-text-2 flex-shrink-0" />
         <input
           type="text"
           value={query}
@@ -33,24 +33,24 @@ export default function FeedSearch() {
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 200)}
           placeholder="Buscar artistas, obras, hashtags..."
-          className="bg-transparent text-sm text-white placeholder:text-zinc-500 outline-none w-full"
+          className="bg-transparent text-sm text-zentry-text-1 placeholder:text-zentry-text-2 outline-none w-full"
         />
         {query && (
           <button onClick={() => setQuery('')}>
-            <X className="w-4 h-4 text-zinc-500 hover:text-white transition-colors" />
+            <X className="w-4 h-4 text-zentry-text-2 hover:text-zentry-text-1 transition-colors" />
           </button>
         )}
       </div>
 
       {/* Resultados */}
       {showResults && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl z-40">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-zentry-card border border-zentry-border rounded-2xl overflow-hidden shadow-2xl z-40">
           {filtered.length > 0 ? (
             <div className="py-2">
               {filtered.map((result, i) => (
                 <button
                   key={i}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zentry-bg transition-colors text-left"
                 >
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
@@ -59,12 +59,12 @@ export default function FeedSearch() {
                     {result.initials}
                   </div>
                   <div>
-                    <p className="text-sm text-white font-medium">
+                    <p className="text-sm text-zentry-text-1 font-medium">
                       {result.type === 'tag' ? '#' : '@'}{result.username}
                     </p>
-                    <p className="text-xs text-zinc-500">{result.discipline}</p>
+                    <p className="text-xs text-zentry-text-2">{result.discipline}</p>
                   </div>
-                  <span className="ml-auto text-xs text-zinc-600">
+                  <span className="ml-auto text-xs text-zentry-text-2">
                     {result.type === 'tag' ? 'Hashtag' : 'Artista'}
                   </span>
                 </button>
@@ -72,7 +72,7 @@ export default function FeedSearch() {
             </div>
           ) : (
             <div className="py-6 text-center">
-              <p className="text-sm text-zinc-500">Sin resultados para {query}</p>
+              <p className="text-sm text-zentry-text-2">Sin resultados para {query}</p>
             </div>
           )}
         </div>

@@ -50,14 +50,18 @@ export default function Navbar({ user }: NavbarProps) {
             </div>
 
             {/* Notificaciones */}
-            <button className="relative p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-all">
-              <Bell className="w-4 h-4" />
-              {notifications > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-violet-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                  {notifications}
-                </span>
-              )}
-            </button>
+<button 
+  type="button" // Le dice a los forms/extensiones que esto no envía datos
+  suppressHydrationWarning // Obliga a React a ignorar diferencias en este nodo
+  className="relative p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-colors"
+>
+  <Bell className="w-4 h-4" />
+  {notifications > 0 && (
+    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-violet-600 text-white text-xs flex items-center justify-center rounded-full">
+      {notifications}
+    </span>
+  )}
+</button>
 
             {/* Subir obra */}
             <Link

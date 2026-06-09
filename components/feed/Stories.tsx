@@ -29,6 +29,7 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
   const [showCreate, setShowCreate] = useState(false)
   const [newStory, setNewStory] = useState('')
 
+  // Color morado por defecto, pero podrías pasarlo dinámicamente según el tema si quisieras
   const currentProfile = currentUser ?? { username: 'tu_historia', initials: 'TU', color: '#A855F7' }
 
   const openStory = (index: number) => setActiveStory(index)
@@ -50,21 +51,21 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
 
   return (
     <>
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-3">
+      <div className="bg-zentry-card border border-zentry-border rounded-2xl p-4 transition-colors duration-300">
+        <p className="text-xs font-medium text-zentry-text-2 uppercase tracking-wider mb-3">
           Historias
         </p>
-        <div className="flex gap-3 overflow-x-auto pb-1">
+        <div className="flex gap-3 overflow-x-auto pb-1 hide-scrollbar">
 
           {/* Botón crear historia */}
           <button
             onClick={() => setShowCreate(true)}
             className="flex flex-col items-center gap-1.5 flex-shrink-0 group"
           >
-            <div className="w-12 h-12 rounded-full bg-zinc-800 border-2 border-dashed border-zinc-600 flex items-center justify-center group-hover:border-violet-500 transition-colors">
-              <Plus className="w-5 h-5 text-zinc-500 group-hover:text-violet-400 transition-colors" />
+            <div className="w-12 h-12 rounded-full bg-zentry-bg border-2 border-dashed border-zentry-border flex items-center justify-center group-hover:border-zentry-accent transition-colors duration-300">
+              <Plus className="w-5 h-5 text-zentry-text-2 group-hover:text-zentry-accent transition-colors" />
             </div>
-            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">
+            <span className="text-xs text-zentry-text-2 group-hover:text-zentry-text-1 transition-colors">
               Tu historia
             </span>
           </button>
@@ -76,12 +77,13 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
               onClick={() => openStory(index)}
               className="flex flex-col items-center gap-1.5 flex-shrink-0 group"
             >
-              <div className={`p-0.5 rounded-full transition-all ${
+              <div className={`p-0.5 rounded-full transition-all duration-300 ${
                 story.hasNew
-                  ? 'bg-gradient-to-tr from-violet-600 to-violet-300'
-                  : 'bg-zinc-700'
+                  ? 'bg-gradient-to-tr from-zentry-accent to-blue-400'
+                  : 'bg-zentry-border'
               }`}>
-                <div className="bg-zinc-950 p-0.5 rounded-full">
+                {/* El borde interno se adapta al fondo de la tarjeta actual */}
+                <div className="bg-zentry-card p-0.5 rounded-full transition-colors duration-300">
                   <div
                     className="w-11 h-11 rounded-full flex items-center justify-center text-xs font-semibold"
                     style={{ background: story.color + '30', color: story.color }}
@@ -90,7 +92,7 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
                   </div>
                 </div>
               </div>
-              <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors max-w-14 truncate">
+              <span className="text-xs text-zentry-text-2 group-hover:text-zentry-text-1 transition-colors max-w-[56px] truncate">
                 @{story.username}
               </span>
             </button>
@@ -98,7 +100,7 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
         </div>
       </div>
 
-      {/* Modal ver historia */}
+      {/* Modal ver historia (Mantiene UI oscura para resaltar el contenido) */}
       {activeStory !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="relative w-full max-w-sm">
@@ -158,7 +160,7 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
                   placeholder="Responder historia..."
                   className="flex-1 bg-white/10 border border-white/20 text-white placeholder:text-white/40 text-sm rounded-xl px-4 py-2 outline-none focus:border-white/40"
                 />
-                <button className="bg-violet-600 hover:bg-violet-500 text-white text-sm px-4 py-2 rounded-xl transition-colors">
+                <button className="bg-zentry-accent hover:opacity-80 text-white text-sm px-4 py-2 rounded-xl transition-colors">
                   Enviar
                 </button>
               </div>
@@ -186,15 +188,15 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
         </div>
       )}
 
-      {/* Modal crear historia */}
+      {/* Modal crear historia (Se adapta al tema activo) */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md">
+          <div className="bg-zentry-card border border-zentry-border rounded-2xl p-6 w-full max-w-md transition-colors duration-300 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-white font-semibold">Crear historia</h3>
+              <h3 className="text-zentry-text-1 font-semibold">Crear historia</h3>
               <button
                 onClick={() => setShowCreate(false)}
-                className="text-zinc-500 hover:text-white transition-colors"
+                className="text-zentry-text-2 hover:text-zentry-text-1 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -205,17 +207,17 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
               onChange={e => setNewStory(e.target.value)}
               placeholder="Comparte algo con tu comunidad, un proceso creativo, una reflexion, una obra en progreso."
               rows={4}
-              className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 text-sm rounded-xl px-4 py-3 outline-none focus:border-violet-500 resize-none mb-4"
+              className="w-full bg-zentry-bg border border-zentry-border text-zentry-text-1 placeholder:text-zentry-text-2 text-sm rounded-xl px-4 py-3 outline-none focus:border-zentry-accent resize-none mb-4 transition-colors"
             />
 
             <div className="flex justify-between items-center">
-              <span className="text-xs text-zinc-600">
+              <span className="text-xs text-zentry-text-2">
                 {newStory.length}/200 caracteres
               </span>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowCreate(false)}
-                  className="text-sm text-zinc-400 hover:text-white px-4 py-2 rounded-xl transition-colors"
+                  className="text-sm text-zentry-text-2 hover:text-zentry-text-1 px-4 py-2 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
@@ -236,7 +238,7 @@ export default function FeedStories({ stories: initialStories, currentUser }: Fe
                     setNewStory('')
                   }}
                   disabled={!newStory.trim()}
-                  className="text-sm bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl transition-colors"
+                  className="text-sm bg-zentry-accent hover:opacity-80 disabled:opacity-50 text-white px-4 py-2 rounded-xl transition-colors"
                 >
                   Publicar historia
                 </button>

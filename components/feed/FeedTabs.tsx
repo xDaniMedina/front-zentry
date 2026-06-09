@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import FeedCard from '@/components/feed/FeedCard'
 
+// Importamos el tipo LayoutMode si lo tienes en types o en el control
+type LayoutMode = 'classic' | 'bento' | 'compact'
+
 const ALL_POSTS = [
   {
     author: { username: '@lunamuse', initials: 'LM', color: '#1D9E75', discipline: 'Ilustracion', time: 'hace 2h' },
@@ -36,23 +39,37 @@ const TABS = [
   { key: 'trending',  label: 'Tendencias' },
 ]
 
-export default function FeedTabs() {
+export default function FeedTabs({ layoutMode = 'classic' }: { layoutMode?: LayoutMode }) {
   const [activeTab, setActiveTab] = useState('foryou')
 
   const filteredPosts = ALL_POSTS.filter(post => post.tab === activeTab)
 
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+  // Clases dinámicas para el contenedor de los posts dentro de las tabs
+  const getContainerClasses = () => {
+    switch (layoutMode) {
+      case 'bento':
+        return 'grid grid-cols-1 md:grid-cols-2 gap-4 p-4'
+      case 'compact':
+        return 'flex flex-col gap-2 p-2 bg-zentry-app' // Fondo distinto para que destaquen las cartas compactas
+      case 'classic':
+      default:
+        return 'flex flex-col divide-y divide-zentry-border'
+    }
+  }
 
-      <div className="flex border-b border-zinc-800">
+  return (
+    <div className={`bg-zentry-card border border-zentry-border rounded-2xl overflow-hidden transition-all duration-300 ${layoutMode === 'compact' ? 'bg-transparent border-none' : ''}`}>
+
+      {/* Cabecera de Tabs */}
+      <div className={`flex ${layoutMode === 'compact' ? 'mb-2 bg-zentry-card border border-zentry-border rounded-xl' : 'border-b border-zentry-border'}`}>
         {TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`flex-1 py-3 text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'text-violet-400 border-b-2 border-violet-500'
-                : 'text-zinc-500 hover:text-white'
+                ? 'text-zentry-accent border-b-2 border-zentry-accent'
+                : 'text-zentry-text-2 hover:text-zentry-text-1'
             }`}
           >
             {tab.label}
@@ -60,20 +77,22 @@ export default function FeedTabs() {
         ))}
       </div>
 
-      <div className="flex flex-col divide-y divide-zinc-800">
+      {/* Contenedor de Posts Adaptativo */}
+      <div className={getContainerClasses()}>
         {filteredPosts.length > 0 ? (
           filteredPosts.map((post, i) => (
-            <div key={i} className="p-3">
+            <div key={i} className={layoutMode === 'classic' ? 'p-3' : ''}>
               <FeedCard
                 author={post.author}
                 content={post.content}
                 isFollowing={post.isFollowing}
+                layout={layoutMode} // ¡Pasamos el layout a la tarjeta!
               />
             </div>
           ))
         ) : (
-          <div className="py-12 text-center">
-            <p className="text-zinc-500 text-sm">
+          <div className="py-12 text-center col-span-full">
+            <p className="text-zentry-text-2 text-sm">
               No hay publicaciones aqui todavia
             </p>
           </div>
@@ -82,4 +101,4 @@ export default function FeedTabs() {
 
     </div>
   )
-}   
+}
