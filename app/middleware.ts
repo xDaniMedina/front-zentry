@@ -1,62 +1,39 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-
-/**
- * Middleware de Zentry — se ejecuta en cada petición.
- * Protege rutas privadas y redirige según el estado de sesión.
- */
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  // Obtener sesión del usuario
-  const { data: { user } } = await supabase.auth.getUser()
+export function middleware(request: NextRequest) {
+  // 1. Buscamos la cookie de la sesión de la demo que acabamos de configurar
+  const demoSession = request.cookies.get('zentry_session')?.value
 
   const { pathname } = request.nextUrl
 
-  // Rutas públicas — no requieren sesión
-  const publicRoutes = ['/login', '/register', '/forgot-password', '/terms', '/privacy']
-  const isPublicRoute = publicRoutes.includes(pathname)
+  // 2. Si el usuario intenta entrar a las pantallas de la app sin la cookie, lo mandamos al login
+  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register')
+  
+  // Excluimos archivos estáticos, api e imágenes para que no se rompa nada
+  const isStaticRoute = 
+    pathname.startsWith('/_next') || 
+    pathname.includes('.') || 
+    pathname.startsWith('/api')
 
-  // Si no hay sesión y la ruta es privada → redirigir al login
-  if (!user && !isPublicRoute) {
+  if (isStaticRoute) {
+    return NextResponse.next()
+  }
+
+  // Si no hay sesión y quiere entrar al feed, wallet, profile, etc. -> Al Login
+  if (!demoSession && !isAuthRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Si hay sesión y está en una ruta pública → redirigir al feed
-  if (user && isPublicRoute) {
+  // Si ya tiene sesión e intenta ir al login o register -> Al Feed
+  if (demoSession && isAuthRoute) {
     return NextResponse.redirect(new URL('/feed', request.url))
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
-/**
- * Configuración del matcher — qué rutas pasan por el middleware.
- * Excluimos archivos estáticos y APIs internas de Next.js.
- */
+// Protegemos todas las pantallas del ecosistema principal
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.:original|$).*)',
   ],
 }

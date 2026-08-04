@@ -1,24 +1,33 @@
-import Navbar from '@/components/shared/Navbar'
-import { createClient } from '@/lib/supabase/server'
-import { Toaster } from 'sonner';
-import { redirect } from 'next/navigation'
+// app/(main)/layout.tsx
 
-export default async function MainLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+// import { createClient } from '@/lib/supabase/server'
+// import { redirect } from 'next/navigation'
+
+export default async function MainLayout({ children }: { children: React.ReactNode }) {
+  /* 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/login')
+  if (!user) {
+    redirect('/login')
+  }
+  */
+  const mockUser = {
+    id: 'demo-user-123',
+    email: 'dani@zentry.art',
+    user_metadata: {
+      username: 'danielarte',
+      display_name: 'Daniel Artesano',
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <Navbar user={user} />
-      <main className="max-w-6xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-zentry-bg text-zentry-text-1">
+      {/* Si le pasabas la prop 'user' al Sidebar o Navbar, pásale el mockUser */}
+      {/* <Navbar user={mockUser} /> */}
+      
+      <main className="flex-1">
         {children}
-        <Toaster theme="dark" position="bottom-right" richColors />
       </main>
     </div>
   )

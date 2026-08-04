@@ -9,7 +9,7 @@ import { logout } from '@/lib/actions/auth'
 
 const NAV_ITEMS = [
   { href: '/feed',        icon: Home,          label: 'Feed',        active: true },
-  { href: '/studio',      icon: Wand2,         label: 'Studio',      active: false },
+  { href: '/studio',      icon: Wand2,         label: 'Estudio',      active: false },
   { href: '/explore',     icon: Compass,       label: 'Explorar',    active: false },
   { href: '/projects',    icon: LayoutGrid,    label: 'Proyectos',   active: false },
   { href: '/messages',    icon: MessageSquare, label: 'Mensajes',    active: false },

@@ -1,18 +1,37 @@
 // lib/api.ts
 import { createClient } from '@/lib/supabase/client'; // Tu función del navegador para Supabase
+import { url } from 'inspector/promises';
 import { toast } from 'sonner';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 
 type FetchOptions = RequestInit & {
   requireAuth?: boolean;
 };
 
-/**
- * Cliente HTTP unificado y tipado para Zentry.
- * Inyecta automáticamente los JWT de Supabase de forma segura.
- */
+//Swagger
+export async function fetchSwaggerAPI(endpoint: string, options: RequestInit = {}){
+  const url = `${API_URL}${endpoint}`;
+
+  const defaultOptions: RequestInit = {
+    headers: {
+    'Content-Type': 'application/json',
+  }, 
+  ...options,
+  };
+
+  const response = await fetch(url, defaultOptions);
+  if (!response.ok) {
+    throw new Error(`Error del servidor: ${response.status}`);
+  }
+  return response.json();
+  }
+
+
+
+
 export async function fetchAPI<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { requireAuth = true, ...customConfig } = options;
   

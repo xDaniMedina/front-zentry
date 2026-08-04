@@ -10,6 +10,10 @@ import FeedCard from '@/components/feed/FeedCard'
 import FeedLayoutControls, { type LayoutMode, type ThemeMode } from '@/components/feed/FeedLayoutControls' // <-- ¡Nuevas importaciones!
 import type { Story } from '@/components/feed/Stories'
 
+//---
+import { fetchAPI } from '@/lib/api' // <-- Para futuras llamadas a la API
+import type { Post } from '@/types'
+
 // ... (Tus MOCK_DATA de STORIES y POSTS intactos aquí) ...
 
 const STORIES: Story[] = [
@@ -77,6 +81,8 @@ const MOCK_POSTS = [
     isFollowing: false
   }
 ]
+
+//---
 
 export default function FeedPage() {
   // Estado para la vista del feed y el tema (el "Bento" es tu innovación)

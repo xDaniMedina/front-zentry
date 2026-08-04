@@ -2,88 +2,54 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+// import { createClient } from '@/lib/supabase/server' // Comentado para la demo
 
 export async function login(formData: FormData) {
-  const supabase = await createClient()
-
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  if (email && password) {
+    const cookieStore = await cookies()
+    cookieStore.set('zentry_session', 'demo-session-token', { 
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24, // 1 día
+      path: '/',
+    })
 
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`)
+    revalidatePath('/', 'layout')
+    redirect('/feed')
   }
-
-  revalidatePath('/', 'layout')
-  redirect('/feed')
 }
 
 export async function register(formData: FormData) {
-  const supabase = await createClient()
-
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-  })
+  if (email && password) {
+    const cookieStore = await cookies()
+    cookieStore.set('zentry_session', 'demo-session-token', { 
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24,
+      path: '/',
+    })
 
-  if (error) {
-    redirect(`/register?error=${encodeURIComponent(error.message)}`)
+    revalidatePath('/', 'layout')
+    redirect('/onboarding')
   }
-
-  revalidatePath('/', 'layout')
-  redirect('/onboarding')
 }
 
 export async function logout() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  const cookieStore = await cookies()
+  cookieStore.delete('zentry_session')
+  
   revalidatePath('/', 'layout')
   redirect('/login')
 }
 
 export async function completeOnboarding(formData: FormData) {
-  const supabase = await createClient()
-
-  // Verificar que hay sesión activa
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    redirect('/login')
-  }
-
-  const display_name = formData.get('display_name') as string
-  const artistic_name = formData.get('artistic_name') as string
-  const username      = formData.get('username') as string
-  const discipline    = formData.get('discipline') as string
-  const experience_level = formData.get('experience_level') as string
-  const bio           = formData.get('bio') as string
-
-  // Guardar perfil en Supabase
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({
-      user_id:          user.id,
-      display_name,
-      artistic_name,
-      username,
-      discipline,
-      experience_level,
-      bio,
-      onboarding_status: 'completed',
-    })
-
-  if (error) {
-    redirect(`/onboarding?error=${encodeURIComponent(error.message)}`)
-  }
-
   revalidatePath('/', 'layout')
   redirect('/feed')
 }

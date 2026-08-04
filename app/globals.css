@@ -77,7 +77,7 @@ body {
   background: #2dd4bf;
   border-radius: 6px;
 }
-.theme-special ::webkit-scrollbar-thumb {
+.theme-special ::-webkit-scrollbar-thumb {
     background: #a855f7;
 }
 
