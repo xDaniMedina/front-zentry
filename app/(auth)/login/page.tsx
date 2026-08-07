@@ -91,7 +91,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            action={login} 
+        // action={login} 
             className="space-y-4"
           >
             <motion.div variants={itemVariants} className="space-y-1.5">

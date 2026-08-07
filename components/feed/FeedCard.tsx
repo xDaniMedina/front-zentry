@@ -1,150 +1,110 @@
-'use client'
+import { useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Heart, MessageCircle, Share2, MoreHorizontal, Sparkles, Bookmark, Flag, Link as LinkIcon } from "lucide-react"
+import Link from "next/link"
 
-import { useState } from 'react'
+export type PostType = { id: number; title: string; author: string; handle: string; likes: number; comments: number; height: string; color: string; avatar?: string }
 
-export default function FeedCard({ 
-  author, 
-  content, 
-  isFollowing, 
-  layout = 'classic' 
-}: {
-  author: { username: string; initials: string; color: string; discipline: string; time: string }
-  content: { text: string; imageUrl?: string; tags: string[]; qualityScore: number; likes: number; comments: number }
-  isFollowing?: boolean
-  layout?: 'classic' | 'bento' | 'compact'
-}) {
-  const [liked, setLiked]       = useState(false)
-  const [likes, setLikes]       = useState(content.likes)
-  const [following, setFollowing] = useState(isFollowing)
-  const [showComment, setShowComment] = useState(false)
-  const [comment, setComment]   = useState('')
+interface FeedCardProps {
+  post: PostType;
+  isLiked: boolean;
+  onLike: (postId: number) => void;
+  onComment: (post: PostType) => void;
+  onShare: (post: PostType) => void;
+  isListMode: boolean;
+}
 
-  const handleLike = () => {
-    setLiked(!liked)
-    setLikes(liked ? likes - 1 : likes + 1)
-  }
-
-  const qualityColor =
-    content.qualityScore >= 4.5 ? '#1D9E75' :
-    content.qualityScore >= 4.0 ? '#534AB7' : '#BA7517'
-
-  // Ajustes dinámicos según el Layout
-  const isCompact = layout === 'compact'
-  const isBento = layout === 'bento'
+export function FeedCard({ post, isLiked, onLike, onComment, onShare, isListMode }: FeedCardProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const cleanUsername = post.handle.replace('@', '');
 
   return (
-    <div className={`group bg-zentry-card border border-zentry-border hover:border-zentry-accent/50 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col ${isBento ? 'h-full' : ''}`}>
-
-      {/* Header */}
-      <div className={`flex items-center gap-3 px-4 ${isCompact ? 'py-2' : 'pt-4 pb-3'}`}>
-        <div
-          className={`${isCompact ? 'w-7 h-7 text-[10px]' : 'w-9 h-9 text-xs'} rounded-full flex items-center justify-center font-semibold flex-shrink-0 ring-2 ring-transparent group-hover:ring-zentry-accent/30 transition-all duration-300`}
-          style={{ background: author.color + '25', color: author.color }}
-        >
-          {author.initials}
+    <motion.div layout className={`break-inside-avoid bg-zentry-card border border-zentry-border rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all relative ${isListMode ? 'mb-6' : 'mb-0'}`}>
+      
+      {/* Cabecera */}
+      <div className="p-4 flex items-center justify-between relative">
+        <div className="flex items-center gap-3">
+          <Link href={`/profile/${cleanUsername}`} className="w-10 h-10 rounded-full bg-zentry-bg border border-zentry-border flex items-center justify-center text-sm font-bold text-zentry-text-1 hover:border-zentry-accent transition-colors">
+            {post.avatar || post.author.substring(0, 2).toUpperCase()}
+          </Link>
+          <div>
+            <Link href={`/profile/${cleanUsername}`} className="text-sm font-bold text-zentry-text-1 leading-tight hover:underline">
+              {post.author}
+            </Link>
+            <p className="text-xs text-zentry-text-2">{post.handle}</p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className={`${isCompact ? 'text-xs' : 'text-sm'} font-medium text-zentry-text-1 truncate`}>{author.username}</p>
-          {!isCompact && <p className="text-xs text-zentry-text-2">{author.time} · {author.discipline}</p>}
+
+        {/* Botón de Menú y Menú Desplegable */}
+        <div>
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-zentry-text-2 hover:text-zentry-text-1 p-2 rounded-full hover:bg-zentry-bg transition-colors">
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
+          
+          <AnimatePresence>
+            {isMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)} />
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  className="absolute right-4 top-14 w-48 bg-zentry-card border border-zentry-border rounded-xl shadow-xl z-20 py-2"
+                >
+                  <button onClick={() => setIsMenuOpen(false)} className="w-full px-4 py-2 text-left text-sm text-zentry-text-1 hover:bg-zentry-bg flex items-center gap-2 transition-colors">
+                    <Bookmark className="w-4 h-4 text-zentry-text-2" /> Guardar publicación
+                  </button>
+                  <button onClick={() => { onShare(post); setIsMenuOpen(false); }} className="w-full px-4 py-2 text-left text-sm text-zentry-text-1 hover:bg-zentry-bg flex items-center gap-2 transition-colors">
+                    <LinkIcon className="w-4 h-4 text-zentry-text-2" /> Copiar enlace
+                  </button>
+                  <div className="h-px bg-zentry-border my-1 w-full" />
+                  <button onClick={() => setIsMenuOpen(false)} className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-500/10 flex items-center gap-2 transition-colors">
+                    <Flag className="w-4 h-4" /> Reportar
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Imagen / Contenido Visual */}
+      <div onDoubleClick={() => onLike(post.id)} className={`w-full ${isListMode ? 'h-96' : post.height} bg-gradient-to-br ${post.color} relative group cursor-pointer flex items-center justify-center`}>
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+        <Sparkles className="w-8 h-8 text-zentry-text-1/20" />
+      </div>
+
+      {/* Acciones e Info */}
+      <div className="p-4">
+        <div className="flex items-center gap-4 mb-3">
+          <button onClick={() => onLike(post.id)} className="flex items-center gap-1.5 group">
+            <motion.div whileTap={{ scale: 0.8 }} className={`p-2 rounded-full transition-colors ${isLiked ? 'bg-red-500/10' : 'hover:bg-zentry-bg'}`}>
+              <Heart className={`w-5 h-5 transition-colors ${isLiked ? 'text-red-500 fill-red-500' : 'text-zentry-text-1 group-hover:text-red-500'}`} />
+            </motion.div>
+            <span className={`text-sm font-medium ${isLiked ? 'text-red-500' : 'text-zentry-text-2'}`}>
+              {post.likes + (isLiked ? 1 : 0)}
+            </span>
+          </button>
+          
+          <button onClick={() => onComment(post)} className="flex items-center gap-1.5 group">
+            <motion.div whileTap={{ scale: 0.8 }} className="p-2 rounded-full hover:bg-zentry-bg transition-colors">
+              <MessageCircle className="w-5 h-5 text-zentry-text-1 group-hover:text-blue-500 transition-colors" />
+            </motion.div>
+            <span className="text-sm font-medium text-zentry-text-2">{post.comments}</span>
+          </button>
+
+          <button onClick={() => onShare(post)} className="ml-auto p-2 rounded-full hover:bg-zentry-bg transition-colors">
+            <motion.div whileTap={{ scale: 0.8 }}>
+              <Share2 className="w-5 h-5 text-zentry-text-1 hover:text-green-500" />
+            </motion.div>
+          </button>
         </div>
         
-        {/* Simplificamos el botón seguir en vista compacta */}
-        {!following ? (
-          <button
-            onClick={() => setFollowing(true)}
-            className={`text-xs text-zentry-accent hover:text-white font-medium transition-colors border border-zentry-accent/30 hover:bg-zentry-accent hover:border-zentry-accent px-3 py-1 rounded-full ${isCompact ? 'px-2 py-0.5 text-[10px]' : ''}`}
-          >
-            Seguir
-          </button>
-        ) : (
-          <span className={`text-xs text-zentry-text-2 px-3 py-1 rounded-full border border-zentry-border ${isCompact ? 'hidden' : ''}`}>
-            Siguiendo
-          </span>
-        )}
+        <h3 className="text-sm font-bold text-zentry-text-1 leading-snug">
+          {post.handle} <span className="font-normal text-zentry-text-2 ml-1">{post.title}</span>
+        </h3>
       </div>
-
-      {/* Contenido (Crece en modo Bento para empujar el footer hacia abajo) */}
-      <div className="flex-1">
-        {/* Imagen */}
-        {content.imageUrl && !isCompact && (
-          <div className="mx-4 mb-3 bg-zentry-bg rounded-xl overflow-hidden h-48 flex items-center justify-center relative">
-            <span className="text-zentry-text-2 text-sm">{content.imageUrl}</span>
-            <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
-              style={{ background: qualityColor + '25', color: qualityColor }}>
-              ✦ {content.qualityScore}
-            </div>
-          </div>
-        )}
-
-        {/* Texto */}
-        <p className={`px-4 pb-3 ${isCompact ? 'text-xs truncate' : 'text-sm'} text-zentry-text-1/80 leading-relaxed`}>
-          {content.text}
-        </p>
-
-        {/* Tags */}
-        {content.tags.length > 0 && !isCompact && (
-          <div className="flex flex-wrap gap-1.5 px-4 pb-3">
-            {content.tags.map(tag => (
-              <span
-                key={tag}
-                className="text-xs bg-zentry-bg hover:bg-zentry-accent/10 hover:text-zentry-accent text-zentry-text-2 px-2.5 py-1 rounded-full cursor-pointer transition-colors"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Acciones */}
-      <div className={`flex items-center gap-2 px-4 ${isCompact ? 'py-2' : 'py-3'} border-t border-zentry-border`}>
-        <button
-          onClick={handleLike}
-          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-all duration-200 ${
-            liked
-              ? 'bg-red-500/15 text-red-400 scale-105'
-              : 'text-zentry-text-2 hover:text-red-400 hover:bg-red-500/10'
-          }`}
-        >
-          {liked ? '♥' : '♡'} {likes}
-        </button>
-
-        <button
-          onClick={() => setShowComment(!showComment)}
-          className="flex items-center gap-1.5 text-xs text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg px-3 py-1.5 rounded-full transition-all duration-200"
-        >
-          ◎ {content.comments}
-        </button>
-
-        {!isCompact && (
-          <button className="flex items-center gap-1.5 text-xs text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg px-3 py-1.5 rounded-full transition-all duration-200">
-            ↗ Compartir
-          </button>
-        )}
-
-        <button className={`ml-auto flex items-center gap-1.5 font-medium bg-zentry-accent hover:opacity-80 active:scale-95 text-white rounded-full transition-all duration-200 ${isCompact ? 'text-[10px] px-3 py-1' : 'text-xs px-4 py-1.5'}`}>
-          + {isCompact ? 'Colab' : 'Colaborar'}
-        </button>
-      </div>
-
-      {/* Caja de comentario */}
-      {showComment && (
-        <div className="px-4 pb-4 flex gap-2 pt-2 border-t border-zentry-border">
-          <input
-            type="text"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            placeholder="Escribe un comentario..."
-            className="flex-1 bg-zentry-bg border border-zentry-border focus:border-zentry-accent text-zentry-text-1 placeholder:text-zentry-text-2 text-xs rounded-full px-4 py-2 outline-none transition-colors"
-          />
-          <button
-            onClick={() => setComment('')}
-            className="text-xs bg-zentry-accent hover:opacity-80 text-white px-4 py-2 rounded-full transition-colors"
-          >
-            Enviar
-          </button>
-        </div>
-      )}
-    </div>
+    </motion.div>
   )
 }
+

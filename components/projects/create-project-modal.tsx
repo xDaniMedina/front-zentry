@@ -7,7 +7,7 @@ import { X, Loader2, FolderPlus, Tag, AlignLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { fetchAPI } from '@/lib/api';
+//import { fetchAPI } from '@/lib/api';
 import { toast } from 'sonner';
 
 // 1. Esquema de validación estricto para la creación de proyectos
@@ -43,14 +43,11 @@ export function CreateProjectModal({ isOpen, onClose, onProjectCreated }: Create
   const onSubmit = async (data: z.infer<typeof projectSchema>) => {
     try {
       // LLAMADA REAL AL BACKEND USANDO EL CONECTOR SEGURO
-      await fetchAPI('/projects', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: data.title,
-          description: data.description,
-          tags: data.tags // Viaja como un arreglo limpio de strings gracias al transform de Zod
-        })
-      });
+      // await fetchAPI('/projects', {
+      //   method: 'POST',
+      //   body: JSON.stringify(data),
+      // });
+      
 
       toast.success('¡Proyecto publicado con éxito en Zentry!');
       reset(); // Limpia el formulario

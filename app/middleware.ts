@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
+
+
 export function middleware(request: NextRequest) {
   // 1. Buscamos la cookie de la sesión de la demo que acabamos de configurar
-  const demoSession = request.cookies.get('zentry_session')?.value
+  const token = request.cookies.get('zentry_session')?.value
 
   const { pathname } = request.nextUrl
 
@@ -19,15 +21,13 @@ export function middleware(request: NextRequest) {
   }
 
   // Si no hay sesión y quiere entrar al feed, wallet, profile, etc. -> Al Login
-  if (!demoSession && !isAuthRoute) {
+  if (!token && !isAuthRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Si ya tiene sesión e intenta ir al login o register -> Al Feed
-  if (demoSession && isAuthRoute) {
-    return NextResponse.redirect(new URL('/feed', request.url))
+  if (token && isAuthRoute) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
-
   return NextResponse.next()
 }
 

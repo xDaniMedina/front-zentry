@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { ThemeProvider } from 'next-themes'
 import { Toaster } from 'sonner'
 import './globals.css'
 
@@ -26,24 +27,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-950 text-white`}
-      >
+    <html lang="es" suppressHydrationWarning>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="zentry" enableSystem={false}>
         {children}
-
-        {/* Sistema de notificaciones toast global */}
-        <Toaster
-          position="bottom-right"
-          theme="dark"
-          toastOptions={{
-            style: {
-              background: 'hsl(0 0% 6%)',
-              border: '1px solid hsl(0 0% 14%)',
-              color: 'white',
-            },
-          }}
-        />
+        </ThemeProvider>
       </body>
     </html>
   )

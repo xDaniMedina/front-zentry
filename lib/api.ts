@@ -1,99 +1,28 @@
-// lib/api.ts
-import { createClient } from '@/lib/supabase/client'; // Tu función del navegador para Supabase
-import { url } from 'inspector/promises';
-import { toast } from 'sonner';
+import { cookies } from 'next/headers';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 type FetchOptions = RequestInit & {
   requireAuth?: boolean;
 };
 
-//Swagger
-export async function fetchSwaggerAPI(endpoint: string, options: RequestInit = {}){
-  const url = `${API_URL}${endpoint}`;
-
-  const defaultOptions: RequestInit = {
-    headers: {
-    'Content-Type': 'application/json',
-  }, 
-  ...options,
-  };
-
-  const response = await fetch(url, defaultOptions);
-  if (!response.ok) {
-    throw new Error(`Error del servidor: ${response.status}`);
-  }
-  return response.json();
-  }
-
-
-
-
-export async function fetchAPI<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
-  const { requireAuth = true, ...customConfig } = options;
+export async function fetchAPI(endpoint: string, options: FetchOptions = {}) {
+  const token = (await cookies()).get('zentry_token')?.value;
+  const cookieStore = await cookies();
   
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-  };
-
-  // Si la ruta requiere autenticación, extraemos el JWT del cliente de Supabase
-  if (requireAuth) {
-    try {
-      const supabase = createClient();
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error || !session) {
-        throw new Error('No se encontró una sesión activa de Supabase.');
-      }
-
-      // Inyectamos el JWT en el estándar Bearer Token
-      headers['Authorization'] = `Bearer ${session.access_token}`;
-    } catch (authError) {
-      console.error('[API AUTH ERROR]:', authError);
-      toast.error('Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.');
-      throw authError;
-    }
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...options.headers,
   }
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    ...options, 
+    headers,
+  });
 
-  const config: RequestInit = {
-    ...customConfig,
-    headers: {
-      ...headers,
-      ...customConfig.headers,
-    },
-  };
-
-  try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, config);
-    
-    if (response.status === 401 || response.status === 403) {
-      toast.error('No tienes permisos para realizar esta acción (401/403).');
-      throw new Error('No autorizado');
-    }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error del servidor: ${response.status}`);
-    }
-
-    // Si la respuesta no tiene contenido (ej. 204 No Content)
-    if (response.status === 204) {
-      return {} as T;
-    }
-
-    return await response.json();
-  } catch (error: unknown) {
-    // Verificamos si el error es realmente un objeto de tipo Error
-    if (error instanceof Error) {
-      console.error(`[API NETWORK ERROR] en ${endpoint}:`, error.message);
-    } else {
-      // Si arrojaron un string o un número directamente
-      console.error(`[API NETWORK ERROR] en ${endpoint}:`, error);
-    }
-    
-    throw error;
+  if(response.status === 401) {
+    throw new Error('No autorizado. Falta el token.');
   }
+  return response.json();
 }
+
