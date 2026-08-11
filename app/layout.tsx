@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { Toaster } from 'sonner'
+import { AuthProvider } from "@/context/AuthContext"; // Ajusta la ruta de importación si es necesario
 import './globals.css'
+
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -20,19 +22,21 @@ export const metadata: Metadata = {
     'La plataforma que premia la calidad artística mediante un Algoritmo Ético. Co-crea, colabora y monetiza tu arte.',
   keywords: ['arte', 'creatividad', 'colaboración', 'creator economy', 'artistas'],
 }
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <html lang="es" suppressHydrationWarning>
-      <body>
-        <ThemeProvider attribute="class" defaultTheme="zentry" enableSystem={false}>
-        {children}
+    <html lang='es' suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <ThemeProvider attribute='class' defaultTheme='zentry' enableSystem={false}>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
   )
 }
+

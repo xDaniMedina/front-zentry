@@ -1,48 +1,66 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, Variants, AnimatePresence } from "framer-motion"
 import { Stories, Story } from "@/components/feed/Stories"
 import { FeedSearch } from "@/components/feed/FeedSearch"
 import { FeedTabs } from "@/components/feed/FeedTabs"
 import { FeedLayoutControls } from "@/components/feed/FeedLayoutControls"
 import { FeedCard, PostType } from "@/components/feed/FeedCard"
+import { useMemo } from "react"; 
 import { X, Send, Sparkles } from "lucide-react"
+import { useAuth } from "@/context/AuthContext" // <-- INYECTAMOS LA SESIÓN
 
-// ...Tus Mocks (MOCK_STORIES y FALLBACK_POSTS) dejamelos igual...
+// Mantenemos algunos mocks para la UI mientras el backend se termina de poblar
 const MOCK_STORIES: Story[] = [
-  { id: 1, handle: 'Tu Historia', isUser: true, avatar: 'DA', viewed: false },
   { id: 2, handle: 'pixelkid', isUser: false, avatar: 'PK', viewed: false },
   { id: 3, handle: 'lunamuse', isUser: false, avatar: 'LM', viewed: true },
   { id: 4, handle: 'carlos_dev', isUser: false, avatar: 'CD', viewed: true },
 ];
 
+
 const FALLBACK_POSTS: PostType[] = [
   { id: 1, title: 'Serie Raíces: Origen', author: 'Daniel Artesano', handle: '@danielarte', likes: 342, comments: 28, height: 'h-80', color: 'from-blue-500/20 to-purple-500/20', avatar: 'DA' },
-  { id: 2, title: 'Bocetos urbanos V2', author: 'Pixel Kid', handle: '@pixelkid', likes: 128, comments: 12, height: 'h-64', color: 'from-emerald-500/20 to-teal-500/20', avatar: 'PK' },
 ];
 
 const containerVariants: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }
 
 export default function FeedClient({ initialPosts }: { initialPosts: PostType[] | null }) {
+  // OBTENEMOS AL USUARIO REAL
+  const { user } = useAuth();
+  
   const [posts] = useState<PostType[]>(initialPosts && initialPosts.length > 0 ? initialPosts : FALLBACK_POSTS)
   const [likedPosts, setLikedPosts] = useState<number[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState('Para ti')
   const [layoutStyle, setLayoutStyle] = useState<'grid' | 'list'>('grid')
 
-  // NUEVOS ESTADOS DE INTERACTIVIDAD
   const [activeStory, setActiveStory] = useState<Story | null>(null);
   const [activeCommentPost, setActiveCommentPost] = useState<PostType | null>(null);
   const [toastMsg, setToastMsg] = useState("");
   const [commentText, setCommentText] = useState("");
+
+  // Creamos la lista de historias combinando al usuario real con los mocks
+const stories = useMemo(() => {
+    const userInitials = user?.username ? user.username.substring(0, 2).toUpperCase() : 'ME';
+    
+    const userStory: Story = {
+      id: 1,
+      handle: 'Tu Historia',
+      isUser: true,
+      avatar: userInitials,
+      viewed: false
+    };
+    
+    return [userStory, ...MOCK_STORIES];
+  }, [user]);
+
 
   const toggleLike = (postId: number) => {
     setLikedPosts(prev => prev.includes(postId) ? prev.filter(id => id !== postId) : [...prev, postId])
   }
 
   const handleShare = (post: PostType) => {
-    // Simular copiado al portapapeles
     navigator.clipboard.writeText(`https://zentry.app/post/${post.id}`);
     setToastMsg(`¡Enlace de la obra de ${post.author} copiado!`);
     setTimeout(() => setToastMsg(""), 3000);
@@ -72,7 +90,10 @@ export default function FeedClient({ initialPosts }: { initialPosts: PostType[] 
       </AnimatePresence>
 
       <FeedSearch onSearch={setSearchQuery} />
-      <Stories stories={MOCK_STORIES} onStoryClick={(story) => setActiveStory(story)} />
+      
+      {/* Pasamos nuestras historias combinadas */}
+      <Stories stories={stories} onStoryClick={(story) => setActiveStory(story)} />
+      
       <FeedTabs activeTab={activeTab} setTab={setActiveTab} />
       <FeedLayoutControls layout={layoutStyle} setLayout={setLayoutStyle} />
 
@@ -82,6 +103,7 @@ export default function FeedClient({ initialPosts }: { initialPosts: PostType[] 
         ))}
       </motion.div>
 
+      {/* MODALES MANTENIDOS IGUAL */}
       {/* MODAL DE HISTORIAS */}
       <AnimatePresence>
         {activeStory && (
@@ -111,7 +133,6 @@ export default function FeedClient({ initialPosts }: { initialPosts: PostType[] 
                 <button onClick={() => setActiveCommentPost(null)} className="text-zentry-text-2 hover:text-zentry-text-1"><X className="w-5 h-5" /></button>
               </div>
               <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-4">
-                {/* Comentario falso de ejemplo */}
                 <div className="flex gap-3">
                   <div className="w-8 h-8 rounded-full bg-zentry-bg border border-zentry-border flex shrink-0 items-center justify-center text-xs font-bold text-zentry-text-1">PK</div>
                   <div>
@@ -132,4 +153,3 @@ export default function FeedClient({ initialPosts }: { initialPosts: PostType[] 
     </motion.div>
   )
 }
-
