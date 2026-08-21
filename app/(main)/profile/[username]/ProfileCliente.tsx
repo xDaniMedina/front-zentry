@@ -18,6 +18,7 @@ export type ProfileData = {
   followersCount: number;
   followingCount: number;
   createdAt: string;
+  isFollowing?: boolean;
 }
 
 export default function ProfileClient({ initialData, username }: { initialData: ProfileData | null, username: string }) {
@@ -51,10 +52,11 @@ export default function ProfileClient({ initialData, username }: { initialData: 
     bannerUrl: "",
     followersCount: 0,
     followingCount: 0,
-    createdAt: ""
+    createdAt: "",
+    isFollowing: false
   });
 
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(Boolean(initialData?.isFollowing));
   const [activeTab, setActiveTab] = useState<'posts' | 'achievements'>('posts');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
@@ -69,10 +71,15 @@ export default function ProfileClient({ initialData, username }: { initialData: 
   });
 
   const handleToggleFollow = async () => {
-    setIsFollowing(prev => !prev);
+    const previousState = isFollowing;
+    const nextState = !previousState;
+
+    // Actualización optimista de UI
+    setIsFollowing(nextState);
     setProfile(prev => ({
       ...prev,
-      followersCount: isFollowing ? prev.followersCount - 1 : prev.followersCount + 1
+      followersCount: nextState ? prev.followersCount + 1 : Math.max(0, prev.followersCount - 1),
+      isFollowing: nextState
     }));
 
     try {
@@ -80,14 +87,40 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       const clientToken = tokenMatch ? tokenMatch[2] : null;
 
       const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-      await fetch(`${apiBase}/api/core/profiles/${decodedUsername}/follow`, {
+      const response = await fetch(`${apiBase}/api/core/profiles/${encodeURIComponent(decodedUsername)}/follow`, {
         method: 'POST',
         headers: {
           ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
         }
       });
+
+      if (response.ok) {
+        const data = await response.json().catch(() => null);
+        if (data && typeof data.following === 'boolean') {
+          setIsFollowing(data.following);
+          if (typeof data.followersCount === 'number') {
+            setProfile(prev => ({ ...prev, followersCount: data.followersCount, isFollowing: data.following }));
+          }
+        }
+        toast.success(nextState ? `Ahora sigues a @${decodedUsername} ✨` : `Dejaste de seguir a @${decodedUsername}`);
+      } else {
+        // Revertir en caso de fallo
+        setIsFollowing(previousState);
+        setProfile(prev => ({
+          ...prev,
+          followersCount: previousState ? prev.followersCount + 1 : Math.max(0, prev.followersCount - 1),
+          isFollowing: previousState
+        }));
+        toast.error("No se pudo actualizar el seguimiento.");
+      }
     } catch (error) {
       console.error("Error al seguir usuario:", error);
+      setIsFollowing(previousState);
+      setProfile(prev => ({
+        ...prev,
+        followersCount: previousState ? prev.followersCount + 1 : Math.max(0, prev.followersCount - 1),
+        isFollowing: previousState
+      }));
     }
   };
 
@@ -244,15 +277,18 @@ export default function ProfileClient({ initialData, username }: { initialData: 
             ) : (
               <button 
                 onClick={handleToggleFollow}
-                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+                className={`group flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all ${
                   isFollowing 
-                    ? 'bg-zentry-bg border border-zentry-border text-zentry-text-1 hover:border-red-500/50 hover:text-red-400' 
+                    ? 'bg-zentry-bg border border-zentry-border text-zentry-text-1 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400' 
                     : 'bg-zentry-text-1 text-zentry-bg hover:opacity-90'
                 }`}
               >
                 {isFollowing ? (
                   <>
-                    <UserCheck className="w-4 h-4 text-emerald-400" /> Siguiendo
+                    <UserCheck className="w-4 h-4 text-emerald-400 group-hover:hidden" />
+                    <UserPlus className="w-4 h-4 text-red-400 hidden group-hover:block rotate-45" />
+                    <span className="group-hover:hidden">Siguiendo</span>
+                    <span className="hidden group-hover:inline text-red-400">Dejar de seguir</span>
                   </>
                 ) : (
                   <>
