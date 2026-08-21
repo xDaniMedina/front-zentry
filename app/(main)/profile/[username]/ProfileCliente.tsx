@@ -21,16 +21,26 @@ export type ProfileData = {
 
 export default function ProfileClient({ initialData, username }: { initialData: ProfileData | null, username: string }) {
   const { user } = useAuth();
-  const decodedUsername = decodeURIComponent(username);
+  const normalize = (str?: string | null) => {
+    if (!str) return '';
+    const clean = str.includes('@') ? str.split('@')[0] : str;
+    return clean.toLowerCase().trim();
+  };
 
-    const isCurrentUser = user && (
-    user.username === decodedUsername || 
-    user.email === decodedUsername
+  const isCurrentUser = Boolean(
+    user && (
+      normalize(user.username) === normalize(decodedUsername) || 
+      normalize(user.email) === normalize(decodedUsername)
+    )
   );
 
-const [profile, setProfile] = useState<ProfileData>(initialData || {
+  const displayName = isCurrentUser
+    ? (user?.username?.includes('@') ? user.username.split('@')[0] : (user?.username || decodedUsername))
+    : decodedUsername;
+
+  const [profile, setProfile] = useState<ProfileData>(initialData || {
     username: decodedUsername,
-    name: isCurrentUser ? (user?.username || decodedUsername) : decodedUsername,
+    name: displayName,
     discipline: "Creador Digital",
     location: "Sin ubicación",
     bio: "Este usuario aún no ha escrito una biografía.",
