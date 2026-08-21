@@ -78,6 +78,7 @@ const delayDebounceFn = setTimeout(async () => {
           onBlur={() => setTimeout(() => setIsFocused(false), 200)} // Retardo para permitir el clic en los resultados
           placeholder="Buscar creadores, obras o etiquetas..."
           className="bg-transparent border-none text-sm text-zentry-text-1 w-full focus:outline-none ml-3 placeholder:text-zentry-text-2/70"
+          suppressHydrationWarning
         />
         {query && (
           <button onClick={handleClear} className="p-1 hover:bg-zentry-bg rounded-full transition-colors text-zentry-text-2">

@@ -135,6 +135,7 @@ export default function LeftSidebar() {
             <form action={logout}>
               <button
                 type="submit"
+                suppressHydrationWarning
                 className="flex items-center gap-3 p-3 lg:px-3 lg:py-2.5 rounded-xl text-zentry-text-2 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm w-full justify-center lg:justify-start font-bold"
                 title="Cerrar sesión"
               >

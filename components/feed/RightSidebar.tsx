@@ -66,6 +66,7 @@ export default function RightSidebar() {
 
             <button 
               onClick={() => setShowSettingsDrawer(true)}
+              suppressHydrationWarning
               className="p-2 bg-zentry-accent text-white rounded-xl hover:opacity-90 transition-opacity shadow-md shadow-zentry-accent/20"
               title="Abrir panel de ajustes"
             >
@@ -80,6 +81,7 @@ export default function RightSidebar() {
           <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={() => setShowSettingsDrawer(true)}
+              suppressHydrationWarning
               className="py-2.5 bg-zentry-accent text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 hover:opacity-90 transition-opacity shadow-md"
             >
               <Settings className="w-3.5 h-3.5" /> Configurar
