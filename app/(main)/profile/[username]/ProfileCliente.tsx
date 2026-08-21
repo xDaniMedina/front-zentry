@@ -91,6 +91,28 @@ export default function ProfileClient({ initialData, username }: { initialData: 
     }
   };
 
+  const handleAvatarChange = (file: File | null) => {
+    setAvatarFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfile(prev => ({ ...prev, avatarUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBannerChange = (file: File | null) => {
+    setBannerFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfile(prev => ({ ...prev, bannerUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -99,33 +121,48 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
       const clientToken = tokenMatch ? tokenMatch[2] : null;
 
-      //FormData
-      const formData = new FormData();
-      formData.append('name', editForm.name);
-      formData.append('discipline', editForm.discipline);
-      formData.append('location', editForm.location);
-      formData.append('bio', editForm.bio);
-
-      if (avatarFile) formData.append('avatar', avatarFile);
-      if (bannerFile) formData.append('banner', bannerFile);
-
+      const hasFiles = Boolean(avatarFile || bannerFile);
       const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-      const response = await fetch(`${apiBase}/api/core/profiles/me`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-        },
-        body: JSON.stringify(editForm)
-      });
+
+      let response: Response;
+
+      if (hasFiles) {
+        // multipart/form-data -> NO poner Content-Type manualmente para permitir que el navegador agregue el boundary
+        const formData = new FormData();
+        formData.append('name', editForm.name);
+        formData.append('discipline', editForm.discipline);
+        formData.append('location', editForm.location);
+        formData.append('bio', editForm.bio);
+
+        if (avatarFile) formData.append('avatar', avatarFile);
+        if (bannerFile) formData.append('banner', bannerFile);
+
+        response = await fetch(`${apiBase}/api/core/profiles/me`, {
+          method: 'PUT',
+          headers: {
+            ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
+          },
+          body: formData
+        });
+      } else {
+        // application/json
+        response = await fetch(`${apiBase}/api/core/profiles/me`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
+          },
+          body: JSON.stringify(editForm)
+        });
+      }
 
       if (response.ok) {
         const updatedProfile = await response.json();
-        setProfile((prev) => ({ ...prev, ...updatedProfile }));
+        setProfile((prev) => ({ ...prev, ...updatedProfile, name: editForm.name, bio: editForm.bio, location: editForm.location, discipline: editForm.discipline }));
         setIsEditModalOpen(false);
         setAvatarFile(null);
         setBannerFile(null);
-        toast.success("Perfil actualizado con éxito ✨");
+        toast.success("Perfil e imágenes actualizados con éxito ✨");
       } else {
         console.error("Error del servidor:", response.status);
         toast.error(`Error del servidor (${response.status}). Verifica el formato en el backend.`);
@@ -306,7 +343,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                       <input 
                         type="file" 
                         accept="image/*"
-                        onChange={e => setAvatarFile(e.target.files?.[0] || null)}
+                        onChange={e => handleAvatarChange(e.target.files?.[0] || null)}
                         className="w-full text-sm text-zentry-text-1 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-zentry-accent/20 file:text-zentry-accent hover:file:bg-zentry-accent/30 transition-colors cursor-pointer"
                       />
                     </div>
@@ -315,7 +352,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                       <input 
                         type="file" 
                         accept="image/*"
-                        onChange={e => setBannerFile(e.target.files?.[0] || null)}
+                        onChange={e => handleBannerChange(e.target.files?.[0] || null)}
                         className="w-full text-sm text-zentry-text-1 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-zentry-accent/20 file:text-zentry-accent hover:file:bg-zentry-accent/30 transition-colors cursor-pointer"
                       />
                     </div>
