@@ -41,6 +41,7 @@ const [profile, setProfile] = useState<ProfileData>(initialData || {
     createdAt: ""
   });
 
+  const [isFollowing, setIsFollowing] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'achievements'>('posts');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
@@ -53,6 +54,29 @@ const [profile, setProfile] = useState<ProfileData>(initialData || {
     location: profile.location || "",
     bio: profile.bio || ""
   });
+
+  const handleToggleFollow = async () => {
+    setIsFollowing(prev => !prev);
+    setProfile(prev => ({
+      ...prev,
+      followersCount: isFollowing ? prev.followersCount - 1 : prev.followersCount + 1
+    }));
+
+    try {
+      const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
+      const clientToken = tokenMatch ? tokenMatch[2] : null;
+
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
+      await fetch(`${apiBase}/api/core/profiles/${decodedUsername}/follow`, {
+        method: 'POST',
+        headers: {
+          ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
+        }
+      });
+    } catch (error) {
+      console.error("Error al seguir usuario:", error);
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,8 +191,23 @@ const [profile, setProfile] = useState<ProfileData>(initialData || {
                 </button>
               </>
             ) : (
-              <button className="flex items-center gap-2 px-6 py-2 bg-zentry-text-1 text-zentry-bg rounded-xl text-sm font-bold hover:opacity-90 transition-opacity">
-                <UserPlus className="w-4 h-4" /> Seguir
+              <button 
+                onClick={handleToggleFollow}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+                  isFollowing 
+                    ? 'bg-zentry-bg border border-zentry-border text-zentry-text-1 hover:border-red-500/50 hover:text-red-400' 
+                    : 'bg-zentry-text-1 text-zentry-bg hover:opacity-90'
+                }`}
+              >
+                {isFollowing ? (
+                  <>
+                    <UserCheck className="w-4 h-4 text-emerald-400" /> Siguiendo
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4" /> Seguir
+                  </>
+                )}
               </button>
             )}
             <button className="p-2 border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card transition-colors">

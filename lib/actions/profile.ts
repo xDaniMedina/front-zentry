@@ -1,0 +1,41 @@
+'use server'
+
+import { fetchAPI } from '@/lib/api'
+import { revalidatePath } from 'next/cache'
+
+export async function updateProfileAction(formData: FormData) {
+  try {
+    const res = await fetchAPI('/api/core/profiles/me', {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: formData.get('name'),
+        discipline: formData.get('discipline'),
+        location: formData.get('location'),
+        bio: formData.get('bio'),
+      }),
+    })
+
+    if (!res) {
+      return { success: false, message: 'Error al actualizar el perfil' }
+    }
+
+    revalidatePath('/profile/[username]', 'page')
+    return { success: true, data: res }
+  } catch (error) {
+    console.error('Error actualizando perfil:', error)
+    return { success: false, message: 'Error de conexión' }
+  }
+}
+
+export async function followUserAction(targetUsername: string) {
+  try {
+    const res = await fetchAPI(`/api/core/profiles/${targetUsername}/follow`, {
+      method: 'POST',
+    })
+    revalidatePath(`/profile/${targetUsername}`)
+    return { success: !!res }
+  } catch (error) {
+    console.error('Error al seguir usuario:', error)
+    return { success: false }
+  }
+}
