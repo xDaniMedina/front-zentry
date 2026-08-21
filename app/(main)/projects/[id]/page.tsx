@@ -1,6 +1,11 @@
 import ProjectDetailClient from "./ProjectDetailClient";
 
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
-  return <ProjectDetailClient projectId={params.id} />;
+type Props = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function ProjectDetailPage({ params }: Props) {
+  const resolvedParams = await params;
+  return <ProjectDetailClient projectId={resolvedParams.id} />;
 }
 
