@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react";
-import { Grid, Trophy, MapPin, Calendar, Edit3, Settings, Share2, UserPlus, X, LogOut, Loader2 } from "lucide-react";
+import { Grid, Trophy, MapPin, Calendar, Edit3, Settings, Share2, UserPlus, UserCheck, X, LogOut, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { logout } from '@/lib/actions/auth';
