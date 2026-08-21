@@ -33,7 +33,8 @@ const delayDebounceFn = setTimeout(async () => {
         const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
         const clientToken = tokenMatch ? tokenMatch[2] : null;
 
-        const response = await fetch(`http://localhost:8080/api/core/profiles/search?q=${query}`, {
+        const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
+        const response = await fetch(`${apiBase}/api/core/profiles/search?q=${query}`, {
           headers: {
             ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
           }

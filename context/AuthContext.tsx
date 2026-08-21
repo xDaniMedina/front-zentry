@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(userData);
     localStorage.setItem('zentry_user', JSON.stringify(userData));
     // Guardamos el token en una Cookie (expira en 7 días)
-    document.cookie = `zentry_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; Secure; SameSite=Strict`;
+    document.cookie = `zentry_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
     
     router.push('/feed');
   };
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('zentry_user');
-    document.cookie = "zentry_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT"; // Destruimos la cookie
+    document.cookie = "zentry_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax"; // Destruimos la cookie
     router.push('/login');
   };
 

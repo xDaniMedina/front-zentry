@@ -4,10 +4,11 @@ import { cookies } from 'next/headers';
 
 export async function obtenerDatosSeguros(endpoint: string){
 
-    const token = (await cookies()).get('zentry_session')?.value;
+    const token = (await cookies()).get('zentry_token')?.value;
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080").replace(/\/$/, "");
 
     try{
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+        const response = await fetch(`${baseUrl}${endpoint}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'

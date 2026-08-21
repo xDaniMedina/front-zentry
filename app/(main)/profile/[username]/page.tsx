@@ -14,14 +14,8 @@ export default async function ProfilePage({ params }: Props) {
   
   try {
     profileData = await fetchAPI(`/api/core/profiles/${username}`);
-    
-    if (!profileData) {
-      notFound();
-    }
-    
   } catch (error) {
     console.error("Error al cargar el perfil desde el backend:", error);
-    notFound();
   }
 
   return <ProfileClient initialData={profileData} username={username} />;

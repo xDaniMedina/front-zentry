@@ -22,8 +22,8 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      //const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/core/user-sessions`, {
-            const response = await fetch('http://localhost:8080/api/auth/login', {
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
+      const response = await fetch(`${apiBase}/api/auth/login`, {
 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -5,7 +5,7 @@ export default async function CommunitiesPage() {
   let communitiesData = null;
 
   try {
-    communitiesData = await fetchAPI('/communities');
+    communitiesData = await fetchAPI('/api/core/communities');
   } catch (error) {
     console.error("El backend no está disponible para Comunidades:", error);
   }

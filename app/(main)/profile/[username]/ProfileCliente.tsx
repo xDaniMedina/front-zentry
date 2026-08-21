@@ -72,7 +72,8 @@ const [profile, setProfile] = useState<ProfileData>(initialData || {
       if (avatarFile) formData.append('avatar', avatarFile);
       if (bannerFile) formData.append('banner', bannerFile);
 
-      const response = await fetch('http://localhost:8080/api/core/profiles/me', {
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
+      const response = await fetch(`${apiBase}/api/core/profiles/me`, {
         method: 'PUT',
         headers: {
           ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
@@ -104,7 +105,7 @@ const [profile, setProfile] = useState<ProfileData>(initialData || {
       await logout();
       
       // Limpiamos la cookie de forma manual por seguridad
-      document.cookie = "zentry_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      document.cookie = "zentry_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;";
       window.location.href = "/login";
     }
   };

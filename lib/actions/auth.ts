@@ -80,8 +80,14 @@ export async function register(formData: FormData) {
 
 export async function logout() {
   const cookieStore = await cookies()
+  cookieStore.delete('zentry_token')
   cookieStore.delete('zentry_session')
   
   revalidatePath('/', 'layout')
   redirect('/login')
+}
+
+export async function completeOnboarding(formData: FormData) {
+  revalidatePath('/', 'layout')
+  redirect('/feed')
 }

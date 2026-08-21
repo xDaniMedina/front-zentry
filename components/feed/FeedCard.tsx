@@ -9,9 +9,9 @@ interface FeedCardProps {
   post: PostType;
   isLiked: boolean;
   onLike: (postId: number) => void;
-  onComment: (post: PostType) => void;
-  onShare: (post: PostType) => void;
-  isListMode: boolean;
+  onComment?: (post: PostType) => void;
+  onShare?: (post: PostType) => void;
+  isListMode?: boolean;
 }
 
 export function FeedCard({ post, isLiked, onLike, onComment, onShare, isListMode }: FeedCardProps) {
@@ -54,7 +54,7 @@ export function FeedCard({ post, isLiked, onLike, onComment, onShare, isListMode
                   <button onClick={() => setIsMenuOpen(false)} className="w-full px-4 py-2 text-left text-sm text-zentry-text-1 hover:bg-zentry-bg flex items-center gap-2 transition-colors">
                     <Bookmark className="w-4 h-4 text-zentry-text-2" /> Guardar publicación
                   </button>
-                  <button onClick={() => { onShare(post); setIsMenuOpen(false); }} className="w-full px-4 py-2 text-left text-sm text-zentry-text-1 hover:bg-zentry-bg flex items-center gap-2 transition-colors">
+                  <button onClick={() => { onShare?.(post); setIsMenuOpen(false); }} className="w-full px-4 py-2 text-left text-sm text-zentry-text-1 hover:bg-zentry-bg flex items-center gap-2 transition-colors">
                     <LinkIcon className="w-4 h-4 text-zentry-text-2" /> Copiar enlace
                   </button>
                   <div className="h-px bg-zentry-border my-1 w-full" />
@@ -86,14 +86,14 @@ export function FeedCard({ post, isLiked, onLike, onComment, onShare, isListMode
             </span>
           </button>
           
-          <button onClick={() => onComment(post)} className="flex items-center gap-1.5 group">
+          <button onClick={() => onComment?.(post)} className="flex items-center gap-1.5 group">
             <motion.div whileTap={{ scale: 0.8 }} className="p-2 rounded-full hover:bg-zentry-bg transition-colors">
               <MessageCircle className="w-5 h-5 text-zentry-text-1 group-hover:text-blue-500 transition-colors" />
             </motion.div>
             <span className="text-sm font-medium text-zentry-text-2">{post.comments}</span>
           </button>
 
-          <button onClick={() => onShare(post)} className="ml-auto p-2 rounded-full hover:bg-zentry-bg transition-colors">
+          <button onClick={() => onShare?.(post)} className="ml-auto p-2 rounded-full hover:bg-zentry-bg transition-colors">
             <motion.div whileTap={{ scale: 0.8 }}>
               <Share2 className="w-5 h-5 text-zentry-text-1 hover:text-green-500" />
             </motion.div>

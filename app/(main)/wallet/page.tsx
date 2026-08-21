@@ -5,7 +5,7 @@ export default async function WalletPage() {
   let walletData = null;
 
   try {
-    walletData = await fetchAPI('/wallet');//Checar rutas
+    walletData = await fetchAPI('/api/core/wallet');
   } catch (error) {
     console.error("El backend no está disponible para la Billetera:", error);
   }
