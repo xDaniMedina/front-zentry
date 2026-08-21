@@ -49,45 +49,48 @@ export default function LeftSidebar() {
 
   return (
     <>
-      {/* NAVEGACIÓN MÓVIL */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-zentry-card/90 backdrop-blur-xl border-t border-zentry-border z-[100] px-6 py-3 flex justify-between items-center shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] pb-safe">
+      {/* NAVEGACIÓN MÓVIL (Dispositivos < 768px) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-zentry-card/95 backdrop-blur-2xl border-t border-zentry-border z-[100] px-2 sm:px-5 py-2 flex justify-around items-center shadow-[0_-10px_35px_-10px_rgba(0,0,0,0.5)] pb-safe">
         {NAV_ITEMS.map(item => (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-3 p-3 rounded-xl transition-all text-sm justify-center ${
+            className={`flex items-center p-2 sm:p-2.5 rounded-xl transition-all text-xs justify-center ${
               pathname === item.href
-                ? 'bg-zentry-accent/10 text-zentry-accent font-medium'
-                : 'text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg'
+                ? 'bg-zentry-accent/15 text-zentry-accent font-bold scale-105'
+                : 'text-zentry-text-2 hover:text-zentry-text-1 active:scale-95'
             }`}
             title={item.label}
           >
-            <item.icon className="w-6 h-6 shrink-0" />
+            <item.icon className="w-5 h-5 shrink-0" />
           </Link>
         ))}
         
-        <Link href={`/profile/${displayUsername}`} className="w-8 h-8 rounded-full bg-zentry-accent/20 flex items-center justify-center text-xs font-bold text-zentry-accent border border-zentry-accent/50 ring-2 ring-transparent active:ring-zentry-accent/50 transition-all">
+        <Link 
+          href={`/profile/${displayUsername}`} 
+          className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-zentry-accent/20 flex items-center justify-center text-[11px] font-bold text-zentry-accent border border-zentry-accent/50 active:scale-95 transition-all shrink-0"
+        >
           {initials}
         </Link>
       </div>
 
       {/* SIDEBAR ESCRITORIO (IZQUIERDA) */}
-      <aside className="hidden md:flex flex-col gap-4 p-4 lg:p-6 w-[80px] lg:w-[280px] h-screen sticky top-0 overflow-y-auto custom-scrollbar transition-all duration-300">
+      <aside className="hidden md:flex flex-col gap-3 p-3 lg:p-5 w-full h-full overflow-y-auto custom-scrollbar transition-all duration-300">
         
         {/* PERFIL RESUMIDO */}
         <Link href={`/profile/${rawUsername}`} className="flex items-center gap-3 lg:mb-1 group cursor-pointer transition-all">
-          <div className="w-10 h-10 rounded-2xl bg-zentry-accent/20 border border-zentry-accent/30 flex items-center justify-center text-sm font-extrabold text-zentry-accent shrink-0">
+          <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-2xl bg-zentry-accent/20 border border-zentry-accent/30 flex items-center justify-center text-xs lg:text-sm font-extrabold text-zentry-accent shrink-0">
             {initials}
           </div>
-          <div className="hidden lg:block group-hover:opacity-80 min-w-0">
-            <p className="text-sm font-extrabold text-zentry-text-1 truncate max-w-[140px]">@{displayUsername}</p>
-            <p className="text-xs text-zentry-text-2 truncate">{discipline}</p>
+          <div className="hidden lg:block group-hover:opacity-80 min-w-0 flex-1">
+            <p className="text-sm font-extrabold text-zentry-text-1 truncate">@{displayUsername}</p>
+            <p className="text-[11px] text-zentry-text-2 truncate">{discipline}</p>
           </div>
         </Link>
           
-        <div className="hidden lg:grid grid-cols-3 gap-2 text-center border-t border-zentry-border pt-3">
-          <div><p className="text-sm font-extrabold text-zentry-text-1">{posts}</p><p className="text-[11px] text-zentry-text-2">obras</p></div>
-          <div><p className="text-sm font-extrabold text-zentry-text-1">{followers}</p><p className="text-[11px] text-zentry-text-2">segs</p></div>
+        <div className="hidden lg:grid grid-cols-3 gap-1 text-center border-t border-zentry-border pt-2.5">
+          <div><p className="text-xs font-extrabold text-zentry-text-1">{posts}</p><p className="text-[10px] text-zentry-text-2">obras</p></div>
+          <div><p className="text-xs font-extrabold text-zentry-text-1">{followers}</p><p className="text-[10px] text-zentry-text-2">segs</p></div>
           <div><p className="text-sm font-extrabold text-zentry-text-1">{coins}</p><p className="text-[11px] text-zentry-text-2">coins</p></div>
         </div>
 

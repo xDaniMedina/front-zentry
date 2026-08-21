@@ -64,9 +64,9 @@ const delayDebounceFn = setTimeout(async () => {
   }
 
   return (
-    <div className="relative mb-6 z-50">
-      <div className={`relative flex items-center bg-zentry-card border rounded-2xl px-4 py-3 transition-colors ${isFocused ? 'border-zentry-accent ring-1 ring-zentry-accent/50' : 'border-zentry-border'}`}>
-        <Search className="w-5 h-5 text-zentry-text-2 shrink-0" />
+    <div className="relative mb-4 sm:mb-6 z-50">
+      <div className={`relative flex items-center bg-zentry-card border rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-colors ${isFocused ? 'border-zentry-accent ring-1 ring-zentry-accent/50' : 'border-zentry-border'}`}>
+        <Search className="w-4 h-4 sm:w-5 sm:h-5 text-zentry-text-2 shrink-0" />
         <input
           type="text"
           value={query}
@@ -77,12 +77,12 @@ const delayDebounceFn = setTimeout(async () => {
           onFocus={() => setIsFocused(true)}
           onBlur={() => setTimeout(() => setIsFocused(false), 200)} // Retardo para permitir el clic en los resultados
           placeholder="Buscar creadores, obras o etiquetas..."
-          className="bg-transparent border-none text-sm text-zentry-text-1 w-full focus:outline-none ml-3 placeholder:text-zentry-text-2/70"
+          className="bg-transparent border-none text-xs sm:text-sm text-zentry-text-1 w-full focus:outline-none ml-2 sm:ml-3 placeholder:text-zentry-text-2/70"
           suppressHydrationWarning
         />
         {query && (
           <button onClick={handleClear} className="p-1 hover:bg-zentry-bg rounded-full transition-colors text-zentry-text-2">
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         )}
       </div>
@@ -94,7 +94,7 @@ const delayDebounceFn = setTimeout(async () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="absolute top-full left-0 right-0 mt-2 bg-zentry-card border border-zentry-border rounded-2xl shadow-xl overflow-hidden"
+            className="absolute top-full left-0 right-0 mt-2 bg-zentry-card border border-zentry-border rounded-2xl shadow-xl overflow-hidden max-h-[60vh] overflow-y-auto z-50"
           >
             {isSearching ? (
               <div className="flex items-center justify-center p-6 text-zentry-text-2">

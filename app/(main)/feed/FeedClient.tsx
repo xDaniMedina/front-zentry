@@ -78,12 +78,12 @@ const stories = useMemo(() => {
   const filteredPosts = posts.filter(post => post.title.toLowerCase().includes(searchQuery.toLowerCase()) || post.author.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show" className="max-w-5xl mx-auto py-4 sm:py-8 transition-colors duration-300 pb-24 relative">
+    <motion.div variants={containerVariants} initial="hidden" animate="show" className="w-full mx-auto py-2 sm:py-6 transition-colors duration-300 relative">
       
       {/* Toast Notification */}
       <AnimatePresence>
         {toastMsg && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-20 left-1/2 -translate-x-1/2 bg-zentry-text-1 text-zentry-bg px-6 py-3 rounded-full font-bold text-sm z-50 shadow-lg">
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 bg-zentry-text-1 text-zentry-bg px-5 py-2.5 rounded-full font-bold text-xs sm:text-sm z-50 shadow-lg">
             {toastMsg}
           </motion.div>
         )}
@@ -91,33 +91,51 @@ const stories = useMemo(() => {
 
       <FeedSearch onSearch={setSearchQuery} />
       
-      {/* Pasamos nuestras historias combinadas */}
+      {/* Historias Adaptables */}
       <Stories stories={stories} onStoryClick={(story) => setActiveStory(story)} />
       
-      <FeedTabs activeTab={activeTab} setTab={setActiveTab} />
-      <FeedLayoutControls layout={layoutStyle} setLayout={setLayoutStyle} />
+      {/* Pestañas y Controles de Vista */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+        <FeedTabs activeTab={activeTab} setTab={setActiveTab} />
+        <FeedLayoutControls layout={layoutStyle} setLayout={setLayoutStyle} />
+      </div>
 
-      <motion.div layout className={layoutStyle === 'grid' ? "columns-1 sm:columns-2 gap-4 sm:gap-6 space-y-4 sm:space-y-6 px-4 sm:px-0" : "flex flex-col gap-6 px-4 sm:px-0"}>
+      {/* Cuadrícula de Posts Responsiva (1 columna en móvil, 2 columnas en tablet y desktop) */}
+      <motion.div 
+        layout 
+        className={
+          layoutStyle === 'grid' 
+            ? "grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5" 
+            : "flex flex-col gap-4 sm:gap-6 max-w-2xl mx-auto w-full"
+        }
+      >
         {filteredPosts.map((post) => (
           <FeedCard key={post.id} post={post} isLiked={likedPosts.includes(post.id)} onLike={toggleLike} onComment={setActiveCommentPost} onShare={handleShare} isListMode={layoutStyle === 'list'} />
         ))}
       </motion.div>
 
-      {/* MODALES MANTENIDOS IGUAL */}
       {/* MODAL DE HISTORIAS */}
       <AnimatePresence>
         {activeStory && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4">
-            <button onClick={() => setActiveStory(null)} className="absolute top-6 right-6 text-white p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors z-10"><X className="w-6 h-6" /></button>
-            <div className="w-full max-w-sm h-[80vh] bg-gradient-to-br from-zentry-accent to-purple-800 rounded-3xl relative overflow-hidden flex flex-col">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-3 sm:p-4">
+            <button onClick={() => setActiveStory(null)} className="absolute top-4 right-4 sm:top-6 sm:right-6 text-white p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors z-10">
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+            <div className="w-full max-w-sm sm:max-w-md h-[78vh] sm:h-[82vh] max-h-[750px] bg-gradient-to-br from-zentry-accent to-purple-800 rounded-3xl relative overflow-hidden flex flex-col shadow-2xl">
               <div className="absolute top-4 left-4 right-4 flex gap-1 z-10">
-                <div className="h-1 bg-white/30 rounded-full flex-1 overflow-hidden"><motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 5 }} className="h-full bg-white" onAnimationComplete={() => setActiveStory(null)} /></div>
+                <div className="h-1 bg-white/30 rounded-full flex-1 overflow-hidden">
+                  <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 5 }} className="h-full bg-white" onAnimationComplete={() => setActiveStory(null)} />
+                </div>
               </div>
               <div className="absolute top-8 left-4 flex items-center gap-3 z-10">
-                <div className="w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white font-bold">{activeStory.avatar}</div>
-                <span className="text-white font-bold text-sm shadow-black drop-shadow-md">{activeStory.handle}</span>
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
+                  {activeStory.avatar}
+                </div>
+                <span className="text-white font-bold text-xs sm:text-sm shadow-black drop-shadow-md">{activeStory.handle}</span>
               </div>
-              <div className="flex-1 flex items-center justify-center"><Sparkles className="w-24 h-24 text-white/20 animate-pulse" /></div>
+              <div className="flex-1 flex items-center justify-center">
+                <Sparkles className="w-20 h-20 sm:w-24 sm:h-24 text-white/20 animate-pulse" />
+              </div>
             </div>
           </motion.div>
         )}
@@ -127,23 +145,32 @@ const stories = useMemo(() => {
       <AnimatePresence>
         {activeCommentPost && (
           <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
-            <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="w-full max-w-md bg-zentry-card border border-zentry-border rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[70vh] sm:h-[60vh]">
-              <div className="p-4 border-b border-zentry-border flex justify-between items-center bg-zentry-bg rounded-t-3xl sm:rounded-t-3xl">
-                <h3 className="font-bold text-zentry-text-1">Comentarios</h3>
-                <button onClick={() => setActiveCommentPost(null)} className="text-zentry-text-2 hover:text-zentry-text-1"><X className="w-5 h-5" /></button>
+            <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }} className="w-full max-w-md bg-zentry-card border border-zentry-border rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[75vh] sm:h-[60vh] pb-safe">
+              <div className="p-3.5 sm:p-4 border-b border-zentry-border flex justify-between items-center bg-zentry-bg rounded-t-3xl">
+                <h3 className="font-bold text-sm sm:text-base text-zentry-text-1">Comentarios</h3>
+                <button onClick={() => setActiveCommentPost(null)} className="text-zentry-text-2 hover:text-zentry-text-1 p-1 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-4">
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-zentry-bg border border-zentry-border flex shrink-0 items-center justify-center text-xs font-bold text-zentry-text-1">PK</div>
+              <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto flex flex-col gap-3 sm:gap-4">
+                <div className="flex gap-2.5 sm:gap-3">
+                  <div className="w-8 h-8 rounded-full bg-zentry-bg border border-zentry-border flex shrink-0 items-center justify-center text-xs font-bold text-zentry-text-1">
+                    PK
+                  </div>
                   <div>
-                    <p className="text-sm"><span className="font-bold text-zentry-text-1 mr-2">pixelkid</span><span className="text-zentry-text-1">¡Increíble trabajo con los colores!</span></p>
-                    <p className="text-xs text-zentry-text-2 mt-1">Hace 2 horas</p>
+                    <p className="text-xs sm:text-sm">
+                      <span className="font-bold text-zentry-text-1 mr-1.5">pixelkid</span>
+                      <span className="text-zentry-text-1">¡Increíble trabajo con los colores!</span>
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-zentry-text-2 mt-1">Hace 2 horas</p>
                   </div>
                 </div>
               </div>
-              <form onSubmit={handleSendComment} className="p-4 border-t border-zentry-border flex gap-2">
-                <input autoFocus type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder={`Responde a ${activeCommentPost.author}...`} className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-sm text-zentry-text-1 focus:outline-none" />
-                <button type="submit" disabled={!commentText.trim()} className="bg-zentry-text-1 text-zentry-bg px-4 py-2.5 rounded-xl disabled:opacity-50"><Send className="w-4 h-4" /></button>
+              <form onSubmit={handleSendComment} className="p-3 sm:p-4 border-t border-zentry-border flex gap-2 bg-zentry-bg/50">
+                <input autoFocus type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder={`Responde a ${activeCommentPost.author}...`} className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors" />
+                <button type="submit" disabled={!commentText.trim()} className="bg-zentry-accent text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl disabled:opacity-50 flex items-center justify-center">
+                  <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
               </form>
             </motion.div>
           </div>
