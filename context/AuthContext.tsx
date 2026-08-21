@@ -2,10 +2,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-type User = {
-  id: number;
+export type User = {
+  id: number | string;
   username: string;
   email: string;
+  zentry_coins?: number;
+  followersCount?: number;
+  postsCount?: number;
+  discipline?: string;
 };
 
 type AuthContextType = {

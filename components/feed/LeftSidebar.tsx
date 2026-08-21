@@ -35,10 +35,10 @@ export default function LeftSidebar() {
 
   const initials = displayUsername.slice(0, 2).toUpperCase();
 
-  const discipline = "Ilustración Digital"
-  const posts = 12
-  const followers = 340
-  const coins = 285
+  const discipline = user?.discipline || "Creador Digital"
+  const posts = user?.postsCount ?? 12
+  const followers = user?.followersCount ?? 340
+  const coins = user?.zentry_coins ?? 285
   const coinsToday = 15
 
   useEffect(() => {

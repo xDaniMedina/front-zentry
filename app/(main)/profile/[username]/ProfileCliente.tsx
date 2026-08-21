@@ -5,6 +5,7 @@ import { Grid, Trophy, MapPin, Calendar, Edit3, Settings, Share2, UserPlus, User
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { logout } from '@/lib/actions/auth';
+import { toast } from 'sonner';
 
 export type ProfileData = {
   username: string;
@@ -112,6 +113,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       const response = await fetch(`${apiBase}/api/core/profiles/me`, {
         method: 'PUT',
         headers: {
+          'Content-Type': 'application/json',
           ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
         },
         body: JSON.stringify(editForm)
@@ -122,14 +124,15 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         setProfile((prev) => ({ ...prev, ...updatedProfile }));
         setIsEditModalOpen(false);
         setAvatarFile(null);
-        setBannerFile(null)
+        setBannerFile(null);
+        toast.success("Perfil actualizado con éxito ✨");
       } else {
         console.error("Error del servidor:", response.status);
-        alert("Hubo un error al guardar los cambios.");
+        toast.error(`Error del servidor (${response.status}). Verifica el formato en el backend.`);
       }
     } catch (error) {
       console.error("Error al actualizar el perfil:", error);
-      alert("No se pudo conectar con el servidor.");
+      toast.error("No se pudo conectar con el servidor.");
     } finally {
       setIsSaving(false);
     }
