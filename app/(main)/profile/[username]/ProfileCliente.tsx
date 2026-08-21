@@ -164,8 +164,15 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         setBannerFile(null);
         toast.success("Perfil e imágenes actualizados con éxito ✨");
       } else {
-        console.error("Error del servidor:", response.status);
-        toast.error(`Error del servidor (${response.status}). Verifica el formato en el backend.`);
+        let errorDetail = "";
+        try {
+          const errJson = await response.json();
+          errorDetail = errJson.message || errJson.error || JSON.stringify(errJson);
+        } catch {
+          errorDetail = await response.text();
+        }
+        console.error("Detalle del Error en Backend:", response.status, errorDetail);
+        toast.error(`Error del servidor (${response.status}): ${errorDetail || 'Verifica el backend'}`);
       }
     } catch (error) {
       console.error("Error al actualizar el perfil:", error);
