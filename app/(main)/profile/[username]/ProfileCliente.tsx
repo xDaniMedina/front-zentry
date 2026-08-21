@@ -21,6 +21,8 @@ export type ProfileData = {
 
 export default function ProfileClient({ initialData, username }: { initialData: ProfileData | null, username: string }) {
   const { user } = useAuth();
+  const decodedUsername = decodeURIComponent(username);
+
   const normalize = (str?: string | null) => {
     if (!str) return '';
     const clean = str.includes('@') ? str.split('@')[0] : str;
