@@ -6,13 +6,13 @@ import {
   Bell, Users, Sparkles, Check, X, 
   ExternalLink, Flame, Settings, Shield, Lock, Eye, Volume2, 
   Moon, Sun, ChevronRight, CheckCircle2, UserCheck, KeyRound,
-  User, Palette, Save, CreditCard, SlidersHorizontal, LogOut, Loader2
+  User, Palette, Save, CreditCard, SlidersHorizontal, LogOut
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "next-themes";
-import { logout } from "@/lib/actions/auth";
 import Link from "next/link";
+import LogoutModal from "@/components/shared/LogoutModal";
 
 export default function RightSidebar() {
   const { user } = useAuth();
@@ -26,21 +26,6 @@ export default function RightSidebar() {
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'notifications' | 'appearance' | 'account'>('privacy');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  const handleConfirmLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await logout();
-      document.cookie = "zentry_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;";
-      localStorage.removeItem('zentry_user');
-    } catch (error) {
-      console.error("Error al salir:", error);
-    }
-    setTimeout(() => {
-      window.location.href = "/login";
-    }, 700);
-  };
 
   // Estados de Configuración
   const [displayName, setDisplayName] = useState(user?.username || "Creador Zentry");
@@ -406,91 +391,8 @@ export default function RightSidebar() {
         )}
       </AnimatePresence>
 
-      {/* MODAL ANIMADO DE CONFIRMACIÓN DE CIERRE DE SESIÓN */}
-      <AnimatePresence>
-        {isLogoutModalOpen && (
-          <div 
-            onClick={() => setIsLogoutModalOpen(false)}
-            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-zentry-card border border-red-500/30 rounded-3xl p-6 shadow-2xl overflow-hidden relative text-center space-y-4"
-            >
-              <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mx-auto">
-                <LogOut className="w-8 h-8 animate-pulse" />
-              </div>
-
-              <div>
-                <h3 className="text-lg font-black text-zentry-text-1">¿Cerrar Sesión?</h3>
-                <p className="text-xs text-zentry-text-2 mt-1.5 leading-relaxed">
-                  Tu sesión actual en Zentry finalizará de manera segura.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={() => setIsLogoutModalOpen(false)}
-                  disabled={isLoggingOut}
-                  className="flex-1 py-3 px-4 rounded-xl border border-zentry-border text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg text-xs font-bold transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleConfirmLogout}
-                  disabled={isLoggingOut}
-                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white text-xs font-black hover:opacity-90 transition-all shadow-lg shadow-red-600/25 flex items-center justify-center gap-2"
-                >
-                  {isLoggingOut ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Saliendo...
-                    </>
-                  ) : (
-                    <>
-                      <LogOut className="w-4 h-4" /> Sí, Salir
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* PANTALLA ANIMADA DE SALIDA */}
-      <AnimatePresence>
-        {isLoggingOut && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-[#090912]/95 backdrop-blur-xl flex flex-col items-center justify-center space-y-4"
-          >
-            <motion.div
-              animate={{ scale: [1, 1.15, 1], rotate: [0, 8, -8, 0] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-500 to-orange-500 flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-red-500/25"
-            >
-              Z
-            </motion.div>
-            <div className="text-center space-y-1">
-              <h4 className="text-base font-extrabold text-white">Cerrando sesión de forma segura...</h4>
-              <p className="text-xs text-zentry-text-2 font-mono">¡Hasta pronto, creador! 👋</p>
-            </div>
-            <div className="w-48 h-1.5 bg-zentry-border rounded-full overflow-hidden">
-              <motion.div
-                initial={{ x: '-100%' }}
-                animate={{ x: '100%' }}
-                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                className="w-full h-full bg-gradient-to-r from-red-500 to-orange-400 rounded-full"
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* MODAL PORTAL DE CIERRE DE SESIÓN ANIMADO */}
+      <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} />
 
     </aside>
   );
