@@ -5,9 +5,7 @@ import ProjectsClient from "./ProjectsClient";
 export default async function ProjectsPage() {
   let data = null;
   try {
-   data = await fetchAPI('/projects');
-    //return <ProjectsClient initialProjects={data} />;
-
+    data = await fetchAPI('/api/core/projects');
   } catch (error) {
     console.error("Error al obtener proyectos:", error);
   }

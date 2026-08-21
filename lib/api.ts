@@ -31,11 +31,15 @@ export async function fetchAPI(endpoint: string, options: FetchOptions = {}) {
   });
 
   if (!response.ok) {
-    if(response.status === 401) {
+    if (response.status === 404) {
+      // Recurso no encontrado (el backend aún no tiene el objeto en DB) -> fallback a estado local
+      return null;
+    }
+    if (response.status === 401) {
       console.error('No autorizado (401). El token expiró o es inválido.');
       return null;
     }
-    if(response.status === 403) {
+    if (response.status === 403) {
       console.error(`Prohibido (403). Acceso denegado en el backend a la ruta: ${url}`);
       return null;
     }

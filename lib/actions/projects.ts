@@ -8,7 +8,7 @@ export async function createProject(formData: FormData) {
   
   try {
     // Mandas el POST a la URL de Tailscale de tus amigos
-    await fetchAPI('/projects', {
+    await fetchAPI('/api/core/projects', {
       method: 'POST',
       body: JSON.stringify({ title, status: 'En progreso' })
     })
