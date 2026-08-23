@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -90,6 +90,10 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
       } catch {}
     }
   }, [projects]);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'paused'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   // Modal de Creación
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
