@@ -5,7 +5,7 @@ import {
   Home, Wand2, Compass, LayoutGrid, Bell, Shield, Key,
   MessageSquare, Users, LogOut, Settings, Wallet, Flame, ArrowUpRight, ShoppingBag
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/components/providers/ThemeProvider'
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'

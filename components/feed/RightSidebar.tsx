@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/providers/ThemeProvider";
 import Link from "next/link";
 import LogoutModal from "@/components/shared/LogoutModal";
 import { FriendUser } from "@/types";
