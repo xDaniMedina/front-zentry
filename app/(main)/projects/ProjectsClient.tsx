@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -70,10 +70,26 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
     ? initialProjects
     : DEFAULT_STARTER_PROJECTS;
 
-  const [projects, setProjects] = useState<Project[]>(formattedInitial);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'paused'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [projects, setProjects] = useState<Project[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('zentry_user_projects');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return formattedInitial;
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && projects.length > 0) {
+      try {
+        localStorage.setItem('zentry_user_projects', JSON.stringify(projects));
+      } catch {}
+    }
+  }, [projects]);
 
   // Modal de Creación
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

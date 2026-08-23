@@ -104,6 +104,35 @@ export default function ExploreClient({ initialTrending }: { initialTrending?: I
   const [artsList, setArtsList] = useState<ArtResult[]>(DEFAULT_ARTS);
   const [likedArts, setLikedArts] = useState<string[]>([]);
 
+  // Cargar publicaciones y usuarios dinámicos en tiempo real
+  useEffect(() => {
+    async function loadDynamicExplore() {
+      try {
+        const postsRes = await fetch('/api/posts');
+        if (postsRes.ok) {
+          const postsData = await postsRes.json();
+          if (postsData.success && Array.isArray(postsData.data)) {
+            const mappedArts: ArtResult[] = postsData.data.map((p: any) => ({
+              id: String(p.id),
+              title: p.title,
+              author: p.author,
+              handle: p.handle,
+              category: p.tags && p.tags.length > 0 ? p.tags[0].replace('#', '') : 'Arte Digital',
+              likes: p.likes || 0,
+              comments: p.comments || 0,
+              imageUrl: p.media_url,
+              color: 'from-purple-600/30 to-indigo-600/30',
+              year: 2026
+            }));
+            setArtsList(mappedArts);
+          }
+        }
+      } catch {}
+    }
+
+    loadDynamicExplore();
+  }, []);
+
   // Búsqueda en el backend si existe el endpoint /api/core/search
   useEffect(() => {
     if (!searchQuery.trim()) return;

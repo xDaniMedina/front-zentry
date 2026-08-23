@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -15,8 +15,8 @@ import { saveStudioProjectAction, deleteStudioProjectAction } from "@/lib/action
 
 export type ContentType = 'canvas' | 'document' | 'image' | 'video' | 'audio';
 
-const containerVariants: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }
-const itemVariants: Variants = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } }
+const containerVariants: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } };
+const itemVariants: Variants = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } } };
 
 export default function StudioClient({ initialFiles }: { initialFiles: StudioProject[] | null }) {
   const [files, setFiles] = useState<StudioProject[]>(() => initialFiles || []);
@@ -40,7 +40,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
 
   const contentOptions = [
     { id: 'canvas', label: 'Lienzo Digital & Pixel Art', icon: Grid, reward: 50, desc: 'Pintura, Pixel Art, Dibujo y capas' },
-    { id: 'document', label: 'Documento de Texto', icon: FileText, reward: 40, desc: 'Articulos, Guiones de Video y Notas de diseño' },
+    { id: 'document', label: 'Documento de Texto', icon: FileText, reward: 40, desc: 'Artículos, Guiones de Video y Notas de diseño' },
     { id: 'image', label: 'Editor de Imagen & Recorte', icon: ImageIcon, reward: 20, desc: 'Filtros, Recorte libre/aspect ratio y ajustes' },
     { id: 'video', label: 'Editor de Video & Recorte', icon: Video, reward: 100, desc: 'Línea de tiempo, Corte de clips, Shorts y formatos' },
     { id: 'audio', label: 'Pista de Audio & DAW', icon: Music, reward: 80, desc: 'Edición de Audio, Ecualizador y Mezcla' },
@@ -86,19 +86,29 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
         };
 
         setFiles(prev => [createdProject, ...prev.filter(p => p.id !== createdId)]);
-        toast.success(`Â¡Proyecto "${titleVal}" creado con Ã©xito!`);
+        toast.success(`¡Proyecto "${titleVal}" creado con éxito!`);
         router.push(`/studio/${createdId}?type=${typeVal}&title=${encodeURIComponent(titleVal)}`);
       } else {
         const tempId = `temp-${Date.now()}`;
         router.push(`/studio/${tempId}?type=${typeVal}&title=${encodeURIComponent(titleVal)}`);
       }
     } catch (error) {
-      console.warn("CreaciÃ³n fallback:", error);
+      console.warn("Creación fallback:", error);
       const tempId = `temp-${Date.now()}`;
       router.push(`/studio/${tempId}?type=${typeVal}&title=${encodeURIComponent(titleVal)}`);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDeleteProject = (e: React.MouseEvent, id: string, title: string) => {
+    e.stopPropagation();
+    setFiles(prev => prev.filter(p => p.id !== id));
+    toast.success(`Proyecto "${title}" eliminado.`);
+
+    startTransition(async () => {
+      await deleteStudioProjectAction(id);
+    });
   };
 
   const resetModal = () => {
@@ -109,17 +119,10 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
     setUploadFile(null);
   };
 
-  const handleDeleteFile = (id: string, title: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFiles(prev => prev.filter(f => f.id !== id));
-    toast.success(`"${title}" eliminado del estudio`);
-
-    startTransition(async () => {
-      await deleteStudioProjectAction(id);
-    });
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
   };
-
-  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const onDragLeave = () => setIsDragging(false);
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -141,12 +144,13 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
       case 'image': return ImageIcon;
       case 'video': return Video;
       case 'audio': return Music;
+      default: return FileEdit;
     }
   };
 
-  const filteredFiles = files.filter(f => {
-    const matchesFilter = filterType === 'all' || f.type === filterType;
-    const matchesSearch = f.title.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredFiles = files.filter(file => {
+    const matchesFilter = filterType === 'all' || file.type === filterType;
+    const matchesSearch = file.title.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
@@ -163,16 +167,16 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
               <Sparkles className="w-3.5 h-3.5" /> Suite Creativa Zentry
             </span>
             <h1 className="text-3xl sm:text-4xl font-black text-zentry-text-1 tracking-tight">
-              Crea, DiseÃƒÂ±a y Produce
+              Crea, Diseña y Produce
             </h1>
             <p className="text-sm text-zentry-text-2 leading-relaxed font-medium">
-              Herramientas de ediciÃƒÂ³n multimodal: Lienzo Digital & Pixel Art con cuadrÃƒÂ­cula, Editor de ImÃƒÂ¡genes con recorte y filtros, Documentos redactables y Suite de Video/Audio con lÃƒÂ­nea de tiempo y divisiÃƒÂ³n de clips.
+              Herramientas de edición multimodal: Lienzo Digital & Pixel Art con cuadrícula, Editor de Imágenes con recorte y filtros, Documentos redactables y Suite de Video/Audio con línea de tiempo y división de clips.
             </p>
           </div>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="px-6 py-3.5 bg-zentry-text-1 text-zentry-bg rounded-2xl font-black text-sm hover:opacity-90 transition-all shadow-xl flex items-center justify-center gap-2 shrink-0 group hover:scale-[1.02] active:scale-[0.98]"
+            className="px-6 py-3.5 bg-zentry-text-1 text-zentry-bg rounded-2xl font-black text-sm hover:opacity-90 transition-all shadow-xl flex items-center justify-center gap-2 shrink-0 group hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
           >
             <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
             Nuevo Proyecto
@@ -180,23 +184,23 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
         </div>
       </div>
 
-      {/* Barra de Filtros y BÃƒÂºsqueda */}
+      {/* Barra de Filtros y Búsqueda */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
 
-        {/* Chips de CategorÃƒÂ­as */}
+        {/* Chips de Categorías */}
         <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 custom-scrollbar">
           {[
             { id: 'all', label: 'Todos' },
             { id: 'canvas', label: 'Lienzo / Pixel Art' },
             { id: 'document', label: 'Documentos' },
-            { id: 'image', label: 'ImÃƒÂ¡genes / Fotos' },
+            { id: 'image', label: 'Imágenes / Fotos' },
             { id: 'video', label: 'Videos' },
             { id: 'audio', label: 'Audios' },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setFilterType(tab.id)}
-              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all whitespace-nowrap ${filterType === tab.id
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all whitespace-nowrap cursor-pointer ${filterType === tab.id
                 ? 'bg-zentry-accent text-white shadow-lg shadow-zentry-accent/25 border border-zentry-accent'
                 : 'bg-zentry-card border border-zentry-border text-zentry-text-2 hover:text-zentry-text-1 hover:border-zentry-border/80'
                 }`}
@@ -206,7 +210,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
           ))}
         </div>
 
-        {/* BÃƒÂºsqueda */}
+        {/* Búsqueda */}
         <div className="relative w-full sm:w-80 shrink-0">
           <Search className="w-4 h-4 text-zentry-text-2 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -224,13 +228,13 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
       {filteredFiles.length === 0 ? (
         <div className="bg-zentry-card border border-zentry-border rounded-3xl p-12 text-center space-y-4 shadow-sm">
           <FolderOpen className="w-12 h-12 text-zentry-text-2 mx-auto opacity-40" />
-          <h3 className="text-lg font-black text-zentry-text-1">No tienes proyectos creados aÃƒÂºn</h3>
+          <h3 className="text-lg font-black text-zentry-text-1">No tienes proyectos creados aún</h3>
           <p className="text-xs text-zentry-text-2 max-w-sm mx-auto">
-            Comienza creando tu primera ilustraciÃƒÂ³n, documento, ediciÃƒÂ³n de foto o pista multimedia.
+            Comienza creando tu primera ilustración, documento, edición de foto o pista multimedia.
           </p>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="px-5 py-2.5 bg-zentry-accent text-white rounded-2xl text-xs font-black hover:opacity-90 transition-opacity shadow-md"
+            className="px-5 py-2.5 bg-zentry-accent text-white rounded-2xl text-xs font-black hover:opacity-90 transition-opacity shadow-md cursor-pointer"
           >
             + Crear Primer Proyecto
           </button>
@@ -248,44 +252,40 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
               <motion.div
                 key={file.id}
                 variants={itemVariants}
-                onClick={() => router.push(`/studio/${file.id}?type=${file.type}`)}
-                className="group bg-zentry-card border border-zentry-border rounded-3xl p-5 hover:border-zentry-accent/60 transition-all cursor-pointer shadow-sm hover:shadow-xl relative flex flex-col justify-between hover:-translate-y-1"
+                onClick={() => router.push(`/studio/${file.id}?type=${file.type}&title=${encodeURIComponent(file.title)}`)}
+                className="bg-zentry-card border border-zentry-border rounded-3xl p-5 hover:border-zentry-accent/60 transition-all cursor-pointer group hover:shadow-xl flex flex-col justify-between h-52 relative overflow-hidden"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-11 h-11 rounded-2xl bg-zentry-bg border border-zentry-border flex items-center justify-center text-zentry-accent group-hover:scale-110 transition-transform shadow-sm">
-                      <Icon className="w-5 h-5" />
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] uppercase font-black text-zentry-text-2 bg-zentry-bg border border-zentry-border px-2.5 py-1 rounded-xl">
-                        {file.type}
-                      </span>
-                      <button
-                        onClick={(e) => handleDeleteFile(file.id, file.title, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-400 transition-opacity text-zentry-text-2 rounded-xl hover:bg-red-500/10"
-                        title="Eliminar proyecto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                <div className="flex items-start justify-between">
+                  <div className="p-3 bg-zentry-bg border border-zentry-border rounded-2xl text-zentry-accent group-hover:bg-zentry-accent group-hover:text-white transition-all shadow-sm">
+                    <Icon className="w-6 h-6" />
                   </div>
 
-                  {file.thumbnail_url && (
-                    <div className="mb-3 rounded-xl overflow-hidden aspect-video bg-zentry-bg border border-zentry-border">
-                      <img src={getImageUrl(file.thumbnail_url)} alt={file.title} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <h3 className="font-extrabold text-zentry-text-1 text-sm group-hover:text-zentry-accent transition-colors line-clamp-2">
-                    {file.title}
-                  </h3>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-0.5">
+                      <Coins className="w-3 h-3" /> +{file.reward || 50}
+                    </span>
+                    <button
+                      onClick={(e) => handleDeleteProject(e, file.id, file.title)}
+                      className="text-zentry-text-2 hover:text-red-400 p-1.5 rounded-xl hover:bg-zentry-bg transition-colors"
+                      title="Eliminar proyecto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="pt-4 border-t border-zentry-border/60 mt-4 flex items-center justify-between text-xs text-zentry-text-2">
-                  <span className="font-mono text-[11px] font-semibold">{file.lastEdited}</span>
-                  <span className="flex items-center gap-1 text-amber-400 font-black">
-                    <Coins className="w-3.5 h-3.5" /> +{file.reward || 50}
-                  </span>
+                <div className="space-y-1">
+                  <h4 className="font-black text-sm text-zentry-text-1 truncate group-hover:text-zentry-accent transition-colors">
+                    {file.title}
+                  </h4>
+                  <p className="text-[11px] text-zentry-text-2">
+                    Editado: <span className="font-semibold text-zentry-text-1">{file.lastEdited}</span>
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-zentry-border flex items-center justify-between text-[11px] font-bold text-zentry-text-2">
+                  <span className="capitalize">{file.type}</span>
+                  <span className="text-zentry-accent group-hover:translate-x-1 transition-transform">Abrir →</span>
                 </div>
               </motion.div>
             )
@@ -293,7 +293,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
         </motion.div>
       )}
 
-      {/* Modal de CreaciÃƒÂ³n */}
+      {/* Modal de Creación */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -307,7 +307,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                 <h3 className="text-lg font-black text-zentry-text-1 flex items-center gap-2">
                   <Wand2 className="w-5 h-5 text-zentry-accent" /> Nuevo Proyecto en Estudio
                 </h3>
-                <button onClick={resetModal} className="text-zentry-text-2 hover:text-zentry-text-1 p-1 rounded-xl hover:bg-zentry-card transition-colors">
+                <button onClick={resetModal} className="text-zentry-text-2 hover:text-zentry-text-1 p-1 rounded-xl hover:bg-zentry-card transition-colors cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -318,7 +318,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                   <form onSubmit={handleNextStep} className="space-y-5">
 
                     <div>
-                      <label className="block text-xs font-black text-zentry-text-2 mb-2 uppercase tracking-wider">Selecciona la Modalidad de EdiciÃƒÂ³n</label>
+                      <label className="block text-xs font-black text-zentry-text-2 mb-2 uppercase tracking-wider">Selecciona la Modalidad de Edición</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {contentOptions.map(opt => {
                           const IconComp = opt.icon;
@@ -327,7 +327,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                               type="button"
                               key={opt.id}
                               onClick={() => setSelectedType(opt.id as ContentType)}
-                              className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all ${selectedType === opt.id
+                              className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all cursor-pointer ${selectedType === opt.id
                                 ? 'border-zentry-accent bg-zentry-accent/10 text-zentry-text-1 shadow-md'
                                 : 'border-zentry-border bg-zentry-bg text-zentry-text-2 hover:border-zentry-accent/40'
                                 }`}
@@ -349,19 +349,19 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                     </div>
 
                     <div>
-                      <label className="block text-xs font-black text-zentry-text-2 mb-1.5 uppercase tracking-wider">TÃƒÂ­tulo del Proyecto</label>
+                      <label className="block text-xs font-black text-zentry-text-2 mb-1.5 uppercase tracking-wider">Título del Proyecto</label>
                       <input
                         type="text"
                         value={newTitle}
                         onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder="Ej: IlustraciÃƒÂ³n Cyberpunk, GuiÃƒÂ³n de Video..."
+                        placeholder="Ej: Ilustración Cyberpunk, Guión de Video..."
                         className="w-full bg-zentry-bg border border-zentry-border rounded-2xl px-4 py-3 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent font-semibold transition-colors"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-black text-zentry-text-2 mb-1.5 uppercase tracking-wider">DescripciÃƒÂ³n o Notas</label>
+                      <label className="block text-xs font-black text-zentry-text-2 mb-1.5 uppercase tracking-wider">Descripción o Notas</label>
                       <textarea
                         value={newDesc}
                         onChange={(e) => setNewDesc(e.target.value)}
@@ -372,10 +372,10 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                     </div>
 
                     <div className="pt-2 flex justify-end gap-3 border-t border-zentry-border">
-                      <button type="button" onClick={resetModal} className="px-4 py-2.5 rounded-2xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 transition-colors">
+                      <button type="button" onClick={resetModal} className="px-4 py-2.5 rounded-2xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 transition-colors cursor-pointer">
                         Cancelar
                       </button>
-                      <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-zentry-text-1 text-zentry-bg rounded-2xl text-xs font-black hover:opacity-90 transition-opacity shadow-md flex items-center gap-2 disabled:opacity-50">{isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                      <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-zentry-text-1 text-zentry-bg rounded-2xl text-xs font-black hover:opacity-90 transition-opacity shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer">{isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                         {selectedType === 'canvas' || selectedType === 'document' ? 'Crear y Abrir Editor' : 'Siguiente'}
                       </button>
                     </div>
@@ -407,20 +407,20 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                         type="file"
                         ref={fileInputRef}
                         onChange={onFileSelect}
-                        accept={selectedType === 'video' ? 'video/*' : selectedType === 'audio' ? 'audio/*' : 'image/*'}
+                        accept={selectedType === 'video' ? 'video/*' : selectedType === 'audio' ? 'audio/*' : 'image/*' }
                         className="hidden"
                       />
                     </div>
 
                     <div className="pt-2 flex justify-between gap-3 border-t border-zentry-border">
-                      <button type="button" onClick={() => setStep(1)} className="px-4 py-2.5 rounded-2xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 transition-colors">
-                        AtrÃƒÂ¡s
+                      <button type="button" onClick={() => setStep(1)} className="px-4 py-2.5 rounded-2xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 transition-colors cursor-pointer">
+                        Atrás
                       </button>
                       <button
                         type="button"
                         onClick={finalizeCreation}
                         disabled={isSubmitting}
-                        className="px-6 py-2.5 bg-zentry-text-1 text-zentry-bg rounded-2xl text-xs font-black hover:opacity-90 disabled:opacity-50 flex items-center gap-2 shadow-md"
+                        className="px-6 py-2.5 bg-zentry-text-1 text-zentry-bg rounded-2xl text-xs font-black hover:opacity-90 disabled:opacity-50 flex items-center gap-2 shadow-md cursor-pointer"
                       >
                         {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                         {isSubmitting ? 'Creando...' : 'Crear y Entrar al Editor'}
@@ -439,5 +439,3 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
     </div>
   )
 }
-
-
