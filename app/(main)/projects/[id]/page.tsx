@@ -1,3 +1,4 @@
+﻿import { getProjectByIdAction } from "@/lib/actions/projects";
 import ProjectDetailClient from "./ProjectDetailClient";
 
 type Props = {
@@ -6,6 +7,6 @@ type Props = {
 
 export default async function ProjectDetailPage({ params }: Props) {
   const resolvedParams = await params;
-  return <ProjectDetailClient projectId={resolvedParams.id} />;
+  const res = await getProjectByIdAction(resolvedParams.id);
+  return <ProjectDetailClient projectId={resolvedParams.id} initialProject={res.data || null} />;
 }
-

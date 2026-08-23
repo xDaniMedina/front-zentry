@@ -11,8 +11,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           <LeftSidebar />
         </aside>
 
-        {/* 2. CONTENIDO CENTRAL (Feed / Perfil / Explorar): Fluido con padding adaptable */}
-        <main className="flex-1 w-full min-w-0 max-w-3xl mx-auto overflow-x-hidden bg-zentry-bg px-3 sm:px-6 lg:px-8 pb-24 md:pb-8">
+        {/* 2. CONTENIDO CENTRAL: Fluido con diseño adaptable y sin compresión de bordes */}
+        <main className="flex-1 w-full min-w-0 max-w-7xl mx-auto overflow-x-hidden bg-zentry-bg px-3 sm:px-6 lg:px-8 pb-24 md:pb-8">
           {children}
         </main>
 

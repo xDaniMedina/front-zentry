@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang='es' suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <ThemeProvider attribute='class' defaultTheme='zentry' enableSystem={false}>
+        <ThemeProvider attribute='class' defaultTheme='zentry' enableSystem={false} enableColorScheme={false}>
           <AuthProvider>
             {children}
           </AuthProvider>

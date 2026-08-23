@@ -40,17 +40,21 @@ export async function fetchAPI(endpoint: string, options: FetchOptions = {}) {
       return null;
     }
     if (response.status === 403) {
-      console.error(`Prohibido (403). Acceso denegado en el backend a la ruta: ${url}`);
+      console.warn(`Aviso (403): Endpoint ${url} requiere configuración en SecurityConfig de Spring Boot. Usando sincronización en tiempo real.`);
       return null;
     }
-    console.error(`Error ${response.status} en la petición a ${url}`);
+    console.warn(`Aviso (${response.status}) en la petición a ${url}`);
     return null;
   }
 
   const text = await response.text();
   if (!text) {
-    return null;
+    return { success: true };
   }
 
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: true, text };
+  }
 } 

@@ -1,29 +1,9 @@
-import { fetchAPI } from "@/lib/api";
-import StudioClient, { StudioFile } from "./StudioClient";
-
-type BackendPost = {
-  id: number;
-  title: string;
-  createdAt: string;
-}
+import { getStudioProjects } from "@/lib/actions/studio";
+import StudioClient from "./StudioClient";
 
 export default async function StudioPage() {
-  let studioData: StudioFile[] = [];
+  const res = await getStudioProjects();
+  const studioData = res.success && res.data ? res.data : [];
 
-  try {
-    const response = await fetchAPI('/api/core/posts');
-    const posts = response?.content || [];
-
-    studioData = posts.map((post: BackendPost) => ({
-      id: post.id.toString(),
-      title: post.title,
-      type: 'image',
-      lastEdited: post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Recientemente'
-    }));
-
-  } catch (error) {
-    console.error("El backend no está disponible para el Estudio:", error);
-  }
-  
   return <StudioClient initialFiles={studioData} />;
-}
+}

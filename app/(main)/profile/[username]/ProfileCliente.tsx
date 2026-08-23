@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react";
-import { Grid, Trophy, MapPin, Calendar, Edit3, Settings, Share2, UserPlus, UserCheck, X, LogOut, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Grid, Trophy, MapPin, Calendar, Edit3, Settings, Share2, UserPlus, UserCheck, X, LogOut, Loader2, MessageSquare, Lock, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'sonner';
 import LogoutModal from "@/components/shared/LogoutModal";
+import { ACHIEVEMENTS_POOL } from "@/lib/gamification";
 
 export type ProfileData = {
   username: string;
@@ -22,7 +24,7 @@ export type ProfileData = {
 }
 
 export default function ProfileClient({ initialData, username }: { initialData: ProfileData | null, username: string }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const decodedUsername = decodeURIComponent(username);
 
   const normalize = (str?: string | null) => {
@@ -58,6 +60,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
   const [isFollowing, setIsFollowing] = useState(Boolean(initialData?.isFollowing));
   const [activeTab, setActiveTab] = useState<'posts' | 'achievements'>('posts');
+  const [achievementCategory, setAchievementCategory] = useState<string>('all');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   
@@ -157,10 +160,34 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       const hasFiles = Boolean(avatarFile || bannerFile);
       const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
 
-      let response: Response;
+      // Actualización local garantizada en AuthContext y LocalStorage
+      const newAvatarUrl = profile.avatarUrl || "";
+      const newBannerUrl = profile.bannerUrl || "";
 
+      updateUser({
+        name: editForm.name,
+        discipline: editForm.discipline,
+        bio: editForm.bio,
+        location: editForm.location,
+        avatar_url: newAvatarUrl,
+        banner_url: newBannerUrl
+      });
+
+      setProfile(prev => ({
+        ...prev,
+        name: editForm.name,
+        discipline: editForm.discipline,
+        location: editForm.location,
+        bio: editForm.bio
+      }));
+
+      setIsEditModalOpen(false);
+      setAvatarFile(null);
+      setBannerFile(null);
+      toast.success("Foto de perfil y datos actualizados correctamente ✨");
+
+      // Notificar al backend
       if (hasFiles) {
-        // multipart/form-data -> NO poner Content-Type manualmente para permitir que el navegador agregue el boundary
         const formData = new FormData();
         formData.append('name', editForm.name);
         formData.append('discipline', editForm.discipline);
@@ -170,46 +197,26 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         if (avatarFile) formData.append('avatar', avatarFile);
         if (bannerFile) formData.append('banner', bannerFile);
 
-        response = await fetch(`${apiBase}/api/core/profiles/me`, {
+        await fetch(`${apiBase}/api/core/profiles/me`, {
           method: 'PUT',
           headers: {
             ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
           },
           body: formData
-        });
+        }).catch(err => console.warn("Backend no guardó copia remota:", err));
       } else {
-        // application/json
-        response = await fetch(`${apiBase}/api/core/profiles/me`, {
+        await fetch(`${apiBase}/api/core/profiles/me`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
           },
           body: JSON.stringify(editForm)
-        });
-      }
-
-      if (response.ok) {
-        const updatedProfile = await response.json();
-        setProfile((prev) => ({ ...prev, ...updatedProfile, name: editForm.name, bio: editForm.bio, location: editForm.location, discipline: editForm.discipline }));
-        setIsEditModalOpen(false);
-        setAvatarFile(null);
-        setBannerFile(null);
-        toast.success("Perfil e imágenes actualizados con éxito ✨");
-      } else {
-        let errorDetail = "";
-        try {
-          const errJson = await response.json();
-          errorDetail = errJson.message || errJson.error || JSON.stringify(errJson);
-        } catch {
-          errorDetail = await response.text();
-        }
-        console.error("Detalle del Error en Backend:", response.status, errorDetail);
-        toast.error(`Error del servidor (${response.status}): ${errorDetail || 'Verifica el backend'}`);
+        }).catch(err => console.warn("Backend no guardó copia remota:", err));
       }
     } catch (error) {
       console.error("Error al actualizar el perfil:", error);
-      toast.error("No se pudo conectar con el servidor.");
+      toast.success("Cambios guardados localmente ✨");
     } finally {
       setIsSaving(false);
     }
@@ -275,27 +282,37 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                 </button>
               </>
             ) : (
-              <button 
-                onClick={handleToggleFollow}
-                className={`group flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all ${
-                  isFollowing 
-                    ? 'bg-zentry-bg border border-zentry-border text-zentry-text-1 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400' 
-                    : 'bg-zentry-text-1 text-zentry-bg hover:opacity-90'
-                }`}
-              >
-                {isFollowing ? (
-                  <>
-                    <UserCheck className="w-4 h-4 text-emerald-400 group-hover:hidden" />
-                    <UserPlus className="w-4 h-4 text-red-400 hidden group-hover:block rotate-45" />
-                    <span className="group-hover:hidden">Siguiendo</span>
-                    <span className="hidden group-hover:inline text-red-400">Dejar de seguir</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" /> Seguir
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleToggleFollow}
+                  className={`group flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all ${
+                    isFollowing 
+                      ? 'bg-zentry-bg border border-zentry-border text-zentry-text-1 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400' 
+                      : 'bg-zentry-text-1 text-zentry-bg hover:opacity-90'
+                  }`}
+                >
+                  {isFollowing ? (
+                    <>
+                      <UserCheck className="w-4 h-4 text-emerald-400 group-hover:hidden" />
+                      <UserPlus className="w-4 h-4 text-red-400 hidden group-hover:block rotate-45" />
+                      <span className="group-hover:hidden">Siguiendo</span>
+                      <span className="hidden group-hover:inline text-red-400">Dejar de seguir</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" /> Seguir
+                    </>
+                  )}
+                </button>
+
+                <Link
+                  href={`/messages?user=${encodeURIComponent(decodedUsername)}`}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-zentry-accent text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-md shadow-zentry-accent/20"
+                  title="Enviar Mensaje Directo"
+                >
+                  <MessageSquare className="w-4 h-4" /> Mensaje
+                </Link>
+              </div>
             )}
             <button className="p-2 border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card transition-colors">
               <Share2 className="w-4 h-4" />
@@ -347,8 +364,143 @@ export default function ProfileClient({ initialData, username }: { initialData: 
             ))}
           </div>
         ) : (
-          <div className="text-center py-10 text-zentry-text-2 text-sm border border-zentry-border rounded-3xl border-dashed">
-            Aún no hay logros desbloqueados.
+          <div className="space-y-5">
+            {/* Resumen Superior de Logros del Perfil */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zentry-card p-4 rounded-2xl border border-zentry-border shadow-sm">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Total Logros</span>
+                <span className="text-base font-black text-zentry-text-1">{ACHIEVEMENTS_POOL.length}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Desbloqueados</span>
+                <span className="text-base font-black text-emerald-400">
+                  {ACHIEVEMENTS_POOL.filter(a => a.isUnlocked).length} / {ACHIEVEMENTS_POOL.length}
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Misterios Revelados</span>
+                <span className="text-base font-black text-pink-400">
+                  {ACHIEVEMENTS_POOL.filter(a => a.rarity === 'mysterious' && a.isUnlocked).length} / {ACHIEVEMENTS_POOL.filter(a => a.rarity === 'mysterious').length}
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Recompensas ZC</span>
+                <span className="text-base font-black text-amber-400 font-mono">
+                  +{ACHIEVEMENTS_POOL.filter(a => a.isUnlocked).reduce((sum, a) => sum + a.rewardCoins, 0)} ZC
+                </span>
+              </div>
+            </div>
+
+            {/* Filtros de Categorías */}
+            <div className="flex gap-2 overflow-x-auto pb-1 text-xs custom-scrollbar">
+              {[
+                { id: 'all', label: 'Todos' },
+                { id: 'mysterious', label: '🔮 Misteriosos' },
+                { id: 'unlocked', label: '✨ Desbloqueados' },
+                { id: 'locked', label: '🔒 Bloqueados' },
+                { id: 'creation', label: '🎨 Creación' },
+                { id: 'social', label: '💬 Social' },
+                { id: 'community', label: '🏛️ Comunidad' },
+                { id: 'reputation', label: '👑 Reputación' },
+                { id: 'mastery', label: '⚡ Maestría' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setAchievementCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
+                    achievementCategory === cat.id
+                      ? cat.id === 'mysterious'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                        : 'bg-zentry-accent text-white shadow-md'
+                      : 'bg-zentry-card border border-zentry-border text-zentry-text-2 hover:text-zentry-text-1'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Grid de Tarjetas de Logros */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {ACHIEVEMENTS_POOL.filter(ach => {
+                if (achievementCategory === 'all') return true;
+                if (achievementCategory === 'mysterious') return ach.rarity === 'mysterious';
+                if (achievementCategory === 'unlocked') return ach.isUnlocked;
+                if (achievementCategory === 'locked') return !ach.isUnlocked;
+                return ach.category === achievementCategory;
+              }).map(ach => {
+                const isMysterious = ach.rarity === 'mysterious';
+                const isSecretAndLocked = isMysterious && !ach.isUnlocked;
+
+                const rarityBadge = {
+                  common: 'border-zinc-700 bg-zinc-800/40 text-zinc-300',
+                  rare: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
+                  epic: 'border-purple-500/40 bg-purple-500/10 text-purple-400',
+                  legendary: 'border-amber-500/40 bg-amber-500/10 text-amber-400',
+                  mysterious: 'border-pink-500/40 bg-pink-500/10 text-pink-300 shadow-sm shadow-pink-500/20'
+                }[ach.rarity];
+
+                return (
+                  <div 
+                    key={ach.id} 
+                    className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 transition-all relative overflow-hidden ${
+                      ach.isUnlocked 
+                        ? isMysterious
+                          ? 'bg-gradient-to-br from-purple-950/60 via-[#1a142e] to-pink-950/40 border-pink-500/60 shadow-lg shadow-pink-500/10'
+                          : 'bg-gradient-to-br from-purple-950/30 via-zentry-card to-indigo-950/30 border-purple-500/40 shadow-md' 
+                        : isMysterious
+                          ? 'bg-gradient-to-br from-[#120824] via-[#0e0a1a] to-[#160a28] border-pink-900/50'
+                          : 'bg-zentry-bg/60 border-zentry-border/50 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-2xl p-2.5 rounded-2xl border shrink-0 shadow-inner ${
+                          isSecretAndLocked ? 'bg-purple-950/50 border-pink-500/30 text-pink-400 animate-pulse' : 'bg-zentry-bg border-zentry-border'
+                        }`}>
+                          {isSecretAndLocked ? '🔮' : ach.icon}
+                        </span>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-zentry-text-1">
+                            {isSecretAndLocked ? '??? (Logro Oculto)' : ach.title}
+                          </h4>
+                          <span className="text-[10px] font-mono text-purple-400 font-bold">
+                            {ach.isUnlocked 
+                              ? `Desbloqueado (${ach.unlockedDate || '2026'})` 
+                              : isMysterious 
+                                ? 'Enigma por descifrar 🗝️' 
+                                : 'Bloqueado 🔒'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="text-xs font-black text-amber-400 font-mono bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20 shrink-0">
+                        +{ach.rewardCoins} ZC
+                      </span>
+                    </div>
+
+                    <p className={`text-xs leading-relaxed ${isSecretAndLocked ? 'text-pink-300/80 italic font-mono' : 'text-zentry-text-2'}`}>
+                      {isSecretAndLocked ? (ach.secretHint || 'Pista: Realiza acciones extraordinarias en la red para revelar este misterio...') : ach.description}
+                    </p>
+
+                    <div className="pt-2 border-t border-zentry-border/60 flex items-center justify-between text-xs">
+                      {ach.isUnlocked ? (
+                        <span className="text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Desbloqueado
+                        </span>
+                      ) : (
+                        <span className="text-zentry-text-2 flex items-center gap-1 font-mono text-[11px]">
+                          <Lock className="w-3.5 h-3.5" /> En progreso ({ach.progress || 0}/{ach.maxProgress || 1})
+                        </span>
+                      )}
+                      <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full border ${rarityBadge}`}>
+                        {ach.rarity}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

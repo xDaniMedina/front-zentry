@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import {
   Home, Wand2, Compass, LayoutGrid, Bell, Shield, Key,
-  MessageSquare, Users, LogOut, Settings, Wallet, Flame, ArrowUpRight
+  MessageSquare, Users, LogOut, Settings, Wallet, Flame, ArrowUpRight, ShoppingBag
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useState, useEffect } from 'react'
@@ -11,6 +11,7 @@ import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import MissionsModal from './MissionsModal'
 import LogoutModal from '@/components/shared/LogoutModal'
+import { getUserStatsAction, UserSocialStats } from '@/lib/actions/friends'
 
 const NAV_ITEMS = [
   { href: '/feed',        icon: Home,          label: 'Feed' },
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: '/explore',     icon: Compass,       label: 'Explorar' },
   { href: '/projects',    icon: LayoutGrid,    label: 'Proyectos' },
   { href: '/messages',    icon: MessageSquare, label: 'Mensajes' },
+  { href: '/shop',        icon: ShoppingBag,   label: 'Tienda ZC' },
   { href: '/communities', icon: Users,         label: 'Comunidades' },
 ]
 
@@ -28,6 +30,7 @@ export default function LeftSidebar() {
   const [mounted, setMounted] = useState(false)
   const [isMissionsOpen, setIsMissionsOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+  const [stats, setStats] = useState<UserSocialStats | null>(null)
 
   const rawUsername = user?.username || user?.email || 'creador';
   const displayUsername = user?.username?.includes('@') 
@@ -35,12 +38,31 @@ export default function LeftSidebar() {
       : (user?.username || 'creador');
 
   const initials = displayUsername.slice(0, 2).toUpperCase();
-
   const discipline = user?.discipline || "Creador Digital"
-  const posts = user?.postsCount ?? 12
-  const followers = user?.followersCount ?? 340
-  const coins = user?.zentry_coins ?? 285
-  const coinsToday = 15
+
+  // Carga periódica de estadísticas reales (obras, seguidores, seguidos, monedas)
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await getUserStatsAction();
+        if (res.success && res.data) {
+          setStats(res.data);
+        }
+      } catch (e) {
+        console.warn("Error cargando stats:", e);
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 15000);
+    return () => clearInterval(interval);
+  }, [user?.username]);
+
+  const posts = stats?.posts_count ?? user?.postsCount ?? 0;
+  const followers = stats?.followers_count ?? user?.followersCount ?? 0;
+  const following = stats?.following_count ?? 0;
+  const coins = stats?.zentry_coins ?? user?.zentry_coins ?? 100;
+  const coinsToday = stats?.coins_today ?? Math.max(5, posts * 5);
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 0);
@@ -88,13 +110,23 @@ export default function LeftSidebar() {
           </div>
         </Link>
           
+        {/* ESTADÍSTICAS DINÁMICAS (Obras, Seguidores, Seguidos / Monedas) */}
         <div className="hidden lg:grid grid-cols-3 gap-1 text-center border-t border-zentry-border pt-2.5">
-          <div><p className="text-xs font-extrabold text-zentry-text-1">{posts}</p><p className="text-[10px] text-zentry-text-2">obras</p></div>
-          <div><p className="text-xs font-extrabold text-zentry-text-1">{followers}</p><p className="text-[10px] text-zentry-text-2">segs</p></div>
-          <div><p className="text-sm font-extrabold text-zentry-text-1">{coins}</p><p className="text-[11px] text-zentry-text-2">coins</p></div>
+          <Link href="/studio" className="hover:opacity-80 transition-opacity">
+            <p className="text-xs font-extrabold text-zentry-text-1">{posts}</p>
+            <p className="text-[10px] text-zentry-text-2">obras</p>
+          </Link>
+          <Link href={`/profile/${rawUsername}`} className="hover:opacity-80 transition-opacity">
+            <p className="text-xs font-extrabold text-zentry-text-1">{followers}</p>
+            <p className="text-[10px] text-zentry-text-2">segs</p>
+          </Link>
+          <Link href="/wallet" className="hover:opacity-80 transition-opacity">
+            <p className="text-sm font-extrabold text-amber-400">{coins}</p>
+            <p className="text-[11px] text-zentry-text-2">coins</p>
+          </Link>
         </div>
 
-        {/* 1. TARJETA DE BILLETERA (UBICADA EN LA PARTE SUPERIOR) */}
+        {/* 1. TARJETA DE BILLETERA (DINÁMICA) */}
         <div className="hidden lg:block">
           <Link href="/wallet" className="block p-4 bg-gradient-to-r from-purple-950/40 via-zentry-card to-indigo-950/40 border border-zentry-border rounded-2xl hover:border-zentry-accent/50 transition-all group shadow-sm">
             <div className="flex items-center justify-between mb-2">

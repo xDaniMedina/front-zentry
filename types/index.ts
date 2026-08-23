@@ -1,4 +1,4 @@
-//TIPADO
+// TIPADO GLOBAL ZENTRY
 
 export type ArtisticDiscipline =
   | 'illustration'
@@ -92,6 +92,7 @@ export interface Comment {
   content: string
   created_at: string
 }
+
 export interface Like {
   id: string
   post_id: string
@@ -111,29 +112,52 @@ export interface Follower {
 }
 
 export interface Notification {
-  id: string
-  user_id: string
-  type: 'like' | 'comment' | 'follow' | 'system'
-  content: string
+  id: string | number
+  user_id?: string
+  type: 'like' | 'comment' | 'follow' | 'reward' | 'system'
+  content?: string
+  text?: string
   read: boolean
-  created_at: string
+  time?: string
+  created_at?: string
+  link_url?: string
 }
 
 export interface Message {
   id: string
-  sender_id: string
-  receiver_id: string
-  content: string
-  read: boolean
-  created_at: string
+  sender_id?: string
+  sender_username?: string
+  receiver_id?: string
+  receiver_username?: string
+  text?: string
+  content?: string
+  isMe?: boolean
+  read?: boolean
+  status?: 'sending' | 'sent' | 'delivered' | 'read'
+  time?: string
+  created_at?: string
+  isImage?: boolean
+  fileUrl?: string
+  isVoice?: boolean
+  voiceDuration?: string
+  reactions?: Record<string, string[]>
 }
 
 export interface Conversation {
-  id: string
-  participant_ids: string[]
-  last_message: Message | null
-  created_at: string
+  id: string | number
+  name: string
+  username: string
+  avatar: string
+  bio?: string
+  isOnline?: boolean
+  lastSeen?: string
+  participant_ids?: string[]
+  last_message?: Message | null
+  messages?: Message[]
+  unread_count?: number
+  created_at?: string
 }
+
 export interface Transaction {
   id: string
   user_id: string 
@@ -162,6 +186,7 @@ export interface Report {
   resolved_at: string | null
   date: string
 }
+
 export interface Community {
   id: string
   name: string
@@ -172,36 +197,36 @@ export interface Community {
   updated_at: string
   members: User[]
   posts: Post[]
-  }
+}
 
-  export interface CommunityMember {
-    id: string
-    community_id: string
-    user_id: string
-    role: 'member' | 'moderator' | 'admin'
-    joined_at: string
-    left_at: string | null
-  }
+export interface CommunityMember {
+  id: string
+  community_id: string
+  user_id: string
+  role: 'member' | 'moderator' | 'admin'
+  joined_at: string
+  left_at: string | null
+}
 
-  export interface CommunityPost {
-    id: string
-    community_id: string
-    author_id: string
-    title: string
-    content: string
-    status: ContentStatus
-    visibility: 'public' | 'members' | 'private'
-    created_at: string
-    updated_at: string
-  }
+export interface CommunityPost {
+  id: string
+  community_id: string
+  author_id: string
+  title: string
+  content: string
+  status: ContentStatus
+  visibility: 'public' | 'members' | 'private'
+  created_at: string
+  updated_at: string
+}
 
 export interface CommunityComment {
-    id: string
-    community_post_id: string
-    author_id: string
-    content: string
-    created_at: string
- } 
+  id: string
+  community_post_id: string
+  author_id: string
+  content: string
+  created_at: string
+} 
 
 export interface CommunityLike {
   id: string
@@ -221,41 +246,115 @@ export interface CommunityFollower {
   date: string
 }
 
-export interface Project {
+export interface StudioProject {
   id: string
-  name: string
-  description: string
-  thumbnail_url: string | null
-  created_at: string
-  updated_at: string
-  members: User[]
-  posts: Post[]
-  types: string[]
-  visibility: 'public' | 'private'
-  date: string
-  
+  title: string
+  type: 'canvas' | 'document' | 'image' | 'video' | 'audio'
+  lastEdited: string
+  reward?: number
+  content?: string
+  thumbnail_url?: string | null
+  metadata?: Record<string, any>
+  created_at?: string
 }
 
+export type ProjectPriority = 'baja' | 'media' | 'alta' | 'urgente';
+export type ProjectCategory = 'UI/UX' | 'Arte Digital' | 'Desarrollo' | 'Animación 3D' | 'Branding' | 'Música' | 'General';
+export type ProjectStatus = 'active' | 'completed' | 'paused';
+
+export interface ProjectMember {
+  id: string;
+  name: string;
+  username?: string;
+  avatar: string;
+  role: string;
+  isOnline: boolean;
+}
+
+export interface ProjectTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  priority?: ProjectPriority;
+  assignedTo?: string;
+  dueDate?: string;
+}
+
+export interface ProjectComment {
+  id: string;
+  authorName: string;
+  authorUsername: string;
+  authorAvatar: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  name?: string;
+  description: string;
+  category: ProjectCategory;
+  priority: ProjectPriority;
+  progress: number;
+  status: ProjectStatus;
+  updatedAt: string;
+  createdAt?: string;
+  created_at?: string;
+  updated_at?: string;
+  deadline?: string;
+  tasksCount: number;
+  completedTasksCount: number;
+  members: ProjectMember[];
+  tags: string[];
+  tasks?: ProjectTask[];
+  comments?: ProjectComment[];
+  likesCount?: number;
+  isLiked?: boolean;
+  authorUsername?: string;
+  authorName?: string;
+  authorAvatar?: string;
+  thumbnail_url?: string | null;
+  visibility?: 'public' | 'private';
+  types?: string[];
+  date?: string;
+}
 
 export interface User {
   id: string
   email: string
-  profile: Profile | null
-  created_at: string
-  updated_at: string
-  zentry_coins: number
-  reputation_score: number
-  onboarding_status: OnboardingStatus
-  posts: Post[]
-  comments: Comment[]
-  likes: Like[]
-  followers: Follower[]
-  following: Follower[]
-  notifications: Notification[]
-  messages: Message[]
-  conversations: Conversation[]
-  transactions: Transaction[]
-  subscriptions: Subscription[]
-  reports: Report[]
+  username?: string
+  name?: string
+  profile?: Profile | null
+  created_at?: string
+  updated_at?: string
+  zentry_coins?: number
+  reputation_score?: number
+  onboarding_status?: OnboardingStatus
+  posts?: Post[]
+  comments?: Comment[]
+  likes?: Like[]
+  followers?: Follower[]
+  following?: Follower[]
+  notifications?: Notification[]
+  messages?: Message[]
+  conversations?: Conversation[]
+  transactions?: Transaction[]
+  subscriptions?: Subscription[]
+  reports?: Report[]
+}
 
+export interface FriendUser {
+  id: number | string
+  username: string
+  name: string
+  avatar_url?: string | null
+  discipline?: string
+  bio?: string | null
+  is_online?: boolean
+  status?: string
+  last_seen?: string | null
+  request_id?: number | null
+  mutual_friends_count?: number
+  project_title?: string
 }

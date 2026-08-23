@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from "clsx"
+﻿import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
@@ -25,7 +25,6 @@ export function formatCoins(amount: number): string {
 
 /**
  * Genera las iniciales de un nombre para avatares.
- * Ejemplo: "Daniel García" → "DG"
  */
 export function getInitials(name: string): string {
   return name
@@ -34,4 +33,16 @@ export function getInitials(name: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 2)
+}
+
+/**
+ * Resuelve URLs absolutas de uploads y assets del backend
+ */
+export function getImageUrl(path?: string | null): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 }

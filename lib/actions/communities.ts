@@ -6,11 +6,12 @@ import { Community } from '@/types'
 
 export async function getCommunities(): Promise<{ success: boolean; data?: Community[]; error?: string }> {
   try {
-    const data = await fetchAPI('/api/v1/communities')
+    const data = await fetchAPI('/api/core/communities')
     if (!data) {
       return { success: false, error: 'No se pudieron cargar las comunidades' }
     }
-    return { success: true, data }
+    const communities = data.content || data.data || (Array.isArray(data) ? data : [])
+    return { success: true, data: communities }
   } catch (error) {
     console.error('Error al obtener comunidades:', error)
     return { success: false, error: 'Error de red' }
@@ -19,7 +20,7 @@ export async function getCommunities(): Promise<{ success: boolean; data?: Commu
 
 export async function getCommunityBySlug(slug: string): Promise<{ success: boolean; data?: Community; error?: string }> {
   try {
-    const data = await fetchAPI(`/api/v1/communities/${slug}`)
+    const data = await fetchAPI(`/api/core/communities/${slug}`)
     if (!data) {
       return { success: false, error: 'Comunidad no encontrada' }
     }
@@ -32,7 +33,7 @@ export async function getCommunityBySlug(slug: string): Promise<{ success: boole
 
 export async function joinCommunityAction(communityId: string) {
   try {
-    const res = await fetchAPI(`/api/v1/communities/${communityId}/join`, {
+    const res = await fetchAPI(`/api/core/communities/${communityId}/join`, {
       method: 'POST',
     })
     revalidatePath('/communities')

@@ -6,11 +6,12 @@ import { Post } from '@/types'
 
 export async function getFeedPosts(): Promise<{ success: boolean; data?: Post[]; error?: string }> {
   try {
-    const data = await fetchAPI('/api/v1/posts')
+    const data = await fetchAPI('/api/core/posts')
     if (!data) {
       return { success: false, error: 'No se pudieron cargar los posts' }
     }
-    return { success: true, data }
+    const posts = data.content || data.data || (Array.isArray(data) ? data : [])
+    return { success: true, data: posts }
   } catch (error) {
     console.error('Error al obtener feed:', error)
     return { success: false, error: 'Error de conexión con el backend' }
@@ -23,11 +24,11 @@ export async function createPostAction(formData: FormData) {
   const contentType = formData.get('content_type') as string || 'image'
 
   try {
-    const res = await fetchAPI('/api/v1/posts', {
+    const res = await fetchAPI('/api/core/posts', {
       method: 'POST',
       body: JSON.stringify({
         title,
-        description,
+        contenido: description,
         content_type: contentType,
         visibility: 'public',
       }),
@@ -47,7 +48,7 @@ export async function createPostAction(formData: FormData) {
 
 export async function likePostAction(postId: string) {
   try {
-    const res = await fetchAPI(`/api/v1/posts/${postId}/like`, {
+    const res = await fetchAPI(`/api/core/posts/${postId}/like`, {
       method: 'POST',
     })
     revalidatePath('/feed')
