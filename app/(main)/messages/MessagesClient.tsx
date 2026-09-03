@@ -475,7 +475,7 @@ function MessagesInner({ initialConversations = [] }: MessagesClientProps) {
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const base64Data = reader.result as string;
 
         const newMsg: Message = {
@@ -494,7 +494,7 @@ function MessagesInner({ initialConversations = [] }: MessagesClientProps) {
         };
 
         const channelKey = getSharedChannelKey(currentUsername, targetUsername);
-        const updatedHistory = saveSharedChannelMessage(channelKey, newMsg);
+        const updatedHistory = await saveSharedChannelMessage(channelKey, newMsg);
 
         setChats(prev => prev.map(c => 
           String(c.id) === String(activeChatId) 
@@ -881,13 +881,13 @@ function MessagesInner({ initialConversations = [] }: MessagesClientProps) {
                           {isMine && (
                             <span>
                               {msgStatus === 'read' ? (
-                                <CheckCheck className="w-3.5 h-3.5 text-cyan-300" title="Leído" />
+                                <span title="Leído"><CheckCheck className="w-3.5 h-3.5 text-cyan-300" /></span>
                               ) : msgStatus === 'delivered' ? (
-                                <CheckCheck className="w-3.5 h-3.5 text-zinc-300" title="Entregado" />
+                                <span title="Entregado"><CheckCheck className="w-3.5 h-3.5 text-zinc-300" /></span>
                               ) : msgStatus === 'sent' ? (
-                                <Check className="w-3.5 h-3.5 text-zinc-300" title="Enviado" />
+                                <span title="Enviado"><Check className="w-3.5 h-3.5 text-zinc-300" /></span>
                               ) : (
-                                <Clock className="w-3 h-3 text-zinc-300 animate-spin" title="Enviando..." />
+                                <span title="Enviando..."><Clock className="w-3 h-3 text-zinc-300 animate-spin" /></span>
                               )}
                             </span>
                           )}

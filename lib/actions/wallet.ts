@@ -30,3 +30,44 @@ export async function claimMissionAction(missionId: string) {
     return { success: false }
   }
 }
+
+export async function subscribeToPlanAction(planId: string, cycle: string) {
+  try {
+    const res = await fetchAPI('/api/core/wallet/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ planId, cycle }),
+    })
+    revalidatePath('/wallet')
+    return { success: !!res, data: res }
+  } catch (error) {
+    console.error('Error al suscribirse al plan:', error)
+    return { success: false }
+  }
+}
+export async function sendCoinsAction(recipient: string, amount: number) {
+  try {
+    const res = await fetchAPI('/api/core/wallet/send', {
+      method: 'POST',
+      body: JSON.stringify({ recipient, amount }),
+    })
+    revalidatePath('/wallet')
+    return { success: !!res, data: res }
+  } catch (error) {
+    console.error('Error al enviar coins:', error)
+    return { success: false }
+  }
+}
+
+export async function topupCoinsAction(amount: number) {
+  try {
+    const res = await fetchAPI('/api/core/wallet/topup', {
+      method: 'POST',
+      body: JSON.stringify({ amount }),
+    })
+    revalidatePath('/wallet')
+    return { success: !!res, data: res }
+  } catch (error) {
+    console.error('Error al recargar coins:', error)
+    return { success: false }
+  }
+}

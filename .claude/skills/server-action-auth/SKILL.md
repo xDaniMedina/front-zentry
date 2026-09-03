@@ -21,28 +21,28 @@ description: Usa este skill para cualquier cambio relacionado a autenticación, 
 - `@supabase/*` está deprecado/comentado. Nunca reintroducir el cliente de
   Supabase para sesión o persistencia.
 
-## ⚠️ BUGS CONOCIDOS — CORREGIR AL TOCAR ESTE CÓDIGO
+## ⚠️ BUGS CONOCIDOS
 
-### Bug 1: Inconsistencia cookie set vs delete
-En `lib/actions/auth.ts`, la función `logout()` borra la cookie `zentry_session`:
-```ts
-cookieStore.delete('zentry_session')  // ❌ Nombre incorrecto
-```
-Pero login/register setean `zentry_token`. **El logout no limpia la cookie
-real**, dejando al usuario "logueado" eternamente en el middleware.
-**Fix:** cambiar a `cookieStore.delete('zentry_token')`.
+### Bug 1 y 2 — RESUELTOS
+`lib/actions/auth.ts` ya borra `zentry_token` (no `zentry_session`) en `logout()`.
+`login()`/`register()` ya no hacen `redirect()` internamente: devuelven
+`{ success, user }` (sin el token — el JWT nunca sale del servidor) y el
+componente cliente (`app/(auth)/login/page.tsx`, `register/page.tsx`) llama
+`loginState(user)` y navega. `AuthContext.loginState` ya no escribe
+`document.cookie`; el JWT vive exclusivamente en la cookie HTTP-Only que
+setea el Server Action. `AuthContext` sigue cacheando en `localStorage` solo
+datos NO sensibles de UI (username, avatar, etc.), nunca el token.
+Cualquier componente cliente que necesite pegarle al backend debe hacerlo a
+través de un Server Action en `lib/actions/*.ts` (que internamente usa
+`fetchAPI`) — nunca leyendo `document.cookie` para armar un header
+`Authorization` a mano (ese patrón ya no funciona: la cookie es HTTP-Only).
 
-### Bug 2: AuthContext usa localStorage para datos de usuario
-`context/AuthContext.tsx` almacena datos del usuario en `localStorage` y setea
-la cookie `zentry_token` vía `document.cookie` (sin flag `httpOnly`).
-Esto contradice la arquitectura de Server Actions que sí setea cookies HTTP-Only.
-**Hay dos fuentes de verdad para el token**, lo cual puede causar desincronización.
-**Al refactorizar:** el AuthContext debería obtener el usuario del servidor
-(via Server Action o RSC) en vez de `localStorage`.
-
-### Bug 3: Navbar importa tipos de Supabase
+### Bug 3: Navbar importa tipos de Supabase — PENDIENTE
 `components/shared/Navbar.tsx` importa `User from '@supabase/supabase-js'`
-aunque Supabase está deprecado. Debería usar el tipo `User` de `types/index.ts`.
+aunque Supabase está deprecado. El componente no está importado en ningún
+lado (`app/(main)/layout.tsx` usa `LeftSidebar`/`RightSidebar`), así que la
+corrección real es borrar el archivo en la limpieza de código muerto, no
+arreglar el import.
 
 ## Al tocar este código
 1. Cualquier cambio en auth es sensible: revisar que la cookie se setee con
@@ -55,9 +55,13 @@ aunque Supabase está deprecado. Debería usar el tipo `User` de `types/index.ts
 
 ## Middleware actual (referencia)
 ```ts
-// Rutas protegidas actuales
-matcher: ['/feed/:path*', '/profile/:path*', '/login', '/register']
+matcher: [
+  '/feed/:path*', '/profile/:path*', '/projects/:path*', '/communities/:path*',
+  '/messages/:path*', '/notifications/:path*', '/explore/:path*',
+  '/studio/:path*', '/wallet/:path*', '/settings/:path*', '/login', '/register',
+]
 ```
-**⚠️ NOTA:** Las rutas `/projects`, `/communities`, `/messages`,
-`/notifications`, `/explore`, `/studio`, `/wallet` NO están protegidas
-por el middleware. Un usuario sin token puede acceder directamente.
+El middleware ya no solo verifica que la cookie exista: decodifica el `exp`
+del JWT (sin validar firma — eso lo hace el backend) y trata un token
+vencido igual que ausente. Si agregas una nueva ruta protegida, súmala al
+`matcher`.

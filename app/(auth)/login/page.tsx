@@ -5,6 +5,7 @@ import { Sparkles, Mail, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { login } from "@/lib/actions/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,26 +23,17 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-      const response = await fetch(`${apiBase}/api/auth/login`, {
+      const fd = new FormData();
+      fd.set('email', formData.email);
+      fd.set('password', formData.password);
 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-//-----
-      if (response.ok) {
-        const data = await response.json();
-        //alert("¡Bienvenido a Zentry! Conexión exitosa.");
-       const userObj = {
-          id: data.id,
-          username: data.username,
-          email: data.email
-        };
-        loginState(userObj, data.token);
-        // window.location.href = "/feed";
+      const result = await login(fd);
+
+      if (result.success) {
+        loginState(result.user);
+        router.push('/feed');
       } else {
-        setErrorMsg("Credenciales incorrectas o error en el servidor.");
+        setErrorMsg(result.message || "Credenciales incorrectas o error en el servidor.");
       }
     } catch (error) {
       console.error("Error de conexión:", error);

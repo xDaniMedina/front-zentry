@@ -38,10 +38,16 @@ description: Usa este skill al integrar cualquier endpoint del backend REST (Spr
   ```
 
 ### Convención de endpoints
-- El backend usa el prefijo `/api/v1/` para todos sus endpoints.
-- Los endpoints de autenticación conocidos son:
-  - `POST /api/v1/login` → `{ email, password }` → `{ token }`
-  - `POST /api/v1/register` → `{ email, password, username }` → `{ token }`
+- El backend expone la mayoría de sus endpoints bajo `/api/core/`,
+  `/api/business/` y `/api/ai/` (además de aliases `/api/v1/` para algunos,
+  ver `securityConfig.java` en el backend). **No asumir `/api/v1/` para auth.**
+- Los endpoints de autenticación reales (confirmados en
+  `AuthController.java` del backend) son:
+  - `POST /api/auth/login` → `{ email, password }` → `{ token, id, username, email }`
+  - `POST /api/auth/register` → `{ email, password, username }` → `{ token, id, username, email }`
+- Si tienes dudas sobre un endpoint, revisa el controller correspondiente en
+  el repo del backend en vez de asumir un prefijo — este proyecto ya tuvo un
+  bug de producción por asumir `/api/v1/login` en vez de verificarlo.
 
 ### Crear un nuevo Server Action
 Siempre seguir este patrón (basado en `lib/actions/projects.ts`):

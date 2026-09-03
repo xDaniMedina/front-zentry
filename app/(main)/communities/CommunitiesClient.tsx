@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { Users, Globe, Plus, X, Edit3, Trash2, Loader2, UserCheck, ShieldCheck, Search, Flame, Sparkles, Lock, MessageSquare } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { createCommunityAction, updateCommunityAction, deleteCommunityAction, joinCommunityAction, leaveCommunityAction } from "@/lib/actions/communities";
 
-export type Community = {
+export type CommunitySummary = {
   id: string;
   slug: string;
   name: string;
@@ -20,7 +21,7 @@ export type Community = {
   bannerGradient?: string;
 }
 
-const FALLBACK_COMMUNITIES: Community[] = [
+const FALLBACK_COMMUNITIES: CommunitySummary[] = [
   { 
     id: '1', 
     slug: 'ui-ux-designers', 
@@ -59,9 +60,9 @@ const FALLBACK_COMMUNITIES: Community[] = [
   },
 ];
 
-export default function CommunitiesClient({ initialData }: { initialData: Community[] | null }) {
+export default function CommunitiesClient({ initialData }: { initialData: CommunitySummary[] | null }) {
   const { user } = useAuth();
-  const [communities, setCommunities] = useState<Community[]>(
+  const [communities, setCommunities] = useState<CommunitySummary[]>(
     initialData && initialData.length > 0 ? initialData : FALLBACK_COMMUNITIES
   );
   const [activeTab, setActiveTab] = useState<'joined' | 'discover'>('joined');
@@ -70,7 +71,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
 
   // Estados para Modal de Crear / Editar
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
+  const [editingCommunity, setEditingCommunity] = useState<CommunitySummary | null>(null);
   const [commName, setCommName] = useState("");
   const [commDesc, setCommDesc] = useState("");
   const [commCategory, setCommCategory] = useState("Arte Digital");
@@ -79,22 +80,16 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
   const categories = ["Todas", "Arte Digital", "Diseño", "Programación", "Música", "Escritura"];
 
   const filteredCommunities = communities.filter(c => {
+    if (!c) return false;
     const matchesTab = activeTab === 'joined' ? c.isJoined : !c.isJoined;
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.slug.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = (searchQuery || "").toLowerCase();
+    const name = (c.name || "").toLowerCase();
+    const desc = (c.description || "").toLowerCase();
+    const slug = (c.slug || "").toLowerCase();
+    const matchesSearch = !q || name.includes(q) || desc.includes(q) || slug.includes(q);
     const matchesCategory = selectedCategory === "Todas" || c.category === selectedCategory;
     return matchesTab && matchesSearch && matchesCategory;
   });
-
-  const getClientToken = () => {
-    const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
-    return tokenMatch ? tokenMatch[2] : null;
-  };
-
-  const getApiBase = () => {
-    return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-  };
 
   const handleOpenCreateModal = () => {
     setEditingCommunity(null);
@@ -104,7 +99,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (community: Community) => {
+  const handleOpenEditModal = (community: CommunitySummary) => {
     setEditingCommunity(community);
     setCommName(community.name);
     setCommDesc(community.description);
@@ -112,13 +107,11 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
     setIsModalOpen(true);
   };
 
-  const handleSubmitCommunity = async (e: React.FormEvent) => {
+  const handleSubmitCommunitySummary = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commName.trim()) return;
 
     setIsLoading(true);
-    const token = getClientToken();
-    const apiBase = getApiBase();
 
     const slug = commName.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const payload = {
@@ -130,36 +123,22 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
 
     try {
       if (editingCommunity) {
-        const res = await fetch(`${apiBase}/api/core/communities/${editingCommunity.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify(payload)
-        });
+        const res = await updateCommunityAction(editingCommunity.id, payload);
 
-        if (res.ok) {
-          const updated = await res.json();
+        if (res.success && res.data) {
+          const updated = res.data;
           setCommunities(prev => prev.map(c => c.id === editingCommunity.id ? { ...c, ...updated } : c));
         } else {
           setCommunities(prev => prev.map(c => c.id === editingCommunity.id ? { ...c, name: commName, description: commDesc, slug, category: commCategory } : c));
         }
       } else {
-        const res = await fetch(`${apiBase}/api/core/communities`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify(payload)
-        });
+        const res = await createCommunityAction(payload);
 
-        if (res.ok) {
-          const created = await res.json();
+        if (res.success && res.data) {
+          const created = res.data;
           setCommunities(prev => [created, ...prev]);
         } else {
-          const newComm: Community = {
+          const newComm: CommunitySummary = {
             id: Date.now().toString(),
             slug,
             name: commName,
@@ -185,7 +164,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
       if (editingCommunity) {
         setCommunities(prev => prev.map(c => c.id === editingCommunity.id ? { ...c, name: commName, description: commDesc, slug, category: commCategory } : c));
       } else {
-        const newComm: Community = {
+        const newComm: CommunitySummary = {
           id: Date.now().toString(),
           slug,
           name: commName,
@@ -207,19 +186,11 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
     }
   };
 
-  const handleDeleteCommunity = async (id: string) => {
+  const handleDeleteCommunitySummary = async (id: string) => {
     if (!confirm("¿Estás seguro de que deseas eliminar esta comunidad?")) return;
 
-    const token = getClientToken();
-    const apiBase = getApiBase();
-
     try {
-      await fetch(`${apiBase}/api/core/communities/${id}`, {
-        method: 'DELETE',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
+      await deleteCommunityAction(id);
     } catch (err) {
       console.error("Error al eliminar comunidad en backend:", err);
     }
@@ -227,9 +198,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
     setCommunities(prev => prev.filter(c => c.id !== id));
   };
 
-  const handleToggleJoin = async (community: Community) => {
-    const token = getClientToken();
-    const apiBase = getApiBase();
+  const handleToggleJoin = async (community: CommunitySummary) => {
     const newJoined = !community.isJoined;
 
     setCommunities(prev => prev.map(c => c.id === community.id ? {
@@ -239,18 +208,13 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
     } : c));
 
     try {
-      await fetch(`${apiBase}/api/core/communities/${community.id}/${newJoined ? 'join' : 'leave'}`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
+      await (newJoined ? joinCommunityAction(community.id) : leaveCommunityAction(community.id));
     } catch (err) {
       console.error("Error al cambiar estado de membresía en backend:", err);
     }
   };
 
-  const isCommunityAdmin = (community: Community) => {
+  const isCommunitySummaryAdmin = (community: CommunitySummary) => {
     if (!user) return false;
     if (community.isAdmin) return true;
     if (community.ownerUsername && user.username) {
@@ -367,7 +331,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredCommunities.map(community => {
-            const isAdmin = isCommunityAdmin(community);
+            const isAdmin = isCommunitySummaryAdmin(community);
             const bannerGradient = community.bannerGradient || 'from-purple-600/30 to-blue-600/30';
             
             return (
@@ -392,7 +356,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
                       <button 
-                        onClick={() => handleDeleteCommunity(community.id)} 
+                        onClick={() => handleDeleteCommunitySummary(community.id)} 
                         className="p-1 text-red-400 hover:text-red-300 transition-colors"
                         title="Eliminar comunidad"
                       >
@@ -466,7 +430,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
               </button>
             </div>
             
-            <form onSubmit={handleSubmitCommunity} className="p-6 flex flex-col gap-4">
+            <form onSubmit={handleSubmitCommunitySummary} className="p-6 flex flex-col gap-4">
               <div>
                 <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase tracking-wider">Nombre de la Comunidad</label>
                 <input 

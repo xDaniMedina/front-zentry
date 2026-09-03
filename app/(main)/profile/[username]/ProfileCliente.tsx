@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'sonner';
 import LogoutModal from "@/components/shared/LogoutModal";
 import { ACHIEVEMENTS_POOL } from "@/lib/gamification";
+import { followUserAction, updateProfileAction, updateProfileWithFilesAction } from "@/lib/actions/profile";
 
 export type ProfileData = {
   username: string;
@@ -125,19 +126,10 @@ export default function ProfileClient({ initialData, username }: { initialData: 
     }));
 
     try {
-      const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
-      const clientToken = tokenMatch ? tokenMatch[2] : null;
+      const result = await followUserAction(decodedUsername);
 
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-      const response = await fetch(`${apiBase}/api/core/profiles/${encodeURIComponent(decodedUsername)}/follow`, {
-        method: 'POST',
-        headers: {
-          ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json().catch(() => null);
+      if (result.success) {
+        const data = result.data;
         if (data && typeof data.following === 'boolean') {
           setIsFollowing(data.following);
           if (typeof data.followersCount === 'number') {
@@ -193,11 +185,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
     setIsSaving(true);
 
     try {
-      const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
-      const clientToken = tokenMatch ? tokenMatch[2] : null;
-
       const hasFiles = Boolean(avatarFile || bannerFile);
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
 
       // Actualización local garantizada en AuthContext y LocalStorage
       const newAvatarUrl = profile.avatarUrl || "";
@@ -236,22 +224,15 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         if (avatarFile) formData.append('avatar', avatarFile);
         if (bannerFile) formData.append('banner', bannerFile);
 
-        await fetch(`${apiBase}/api/core/profiles/me`, {
-          method: 'PUT',
-          headers: {
-            ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-          },
-          body: formData
-        }).catch(err => console.warn("Backend no guardó copia remota:", err));
+        await updateProfileWithFilesAction(formData).catch(err => console.warn("Backend no guardó copia remota:", err));
       } else {
-        await fetch(`${apiBase}/api/core/profiles/me`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-          },
-          body: JSON.stringify(editForm)
-        }).catch(err => console.warn("Backend no guardó copia remota:", err));
+        const formData = new FormData();
+        formData.append('name', editForm.name);
+        formData.append('discipline', editForm.discipline);
+        formData.append('location', editForm.location);
+        formData.append('bio', editForm.bio);
+
+        await updateProfileAction(formData).catch(err => console.warn("Backend no guardó copia remota:", err));
       }
     } catch (error) {
       console.error("Error al actualizar el perfil:", error);

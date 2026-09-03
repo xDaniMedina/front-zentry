@@ -1,8 +1,10 @@
-"use client"
+﻿"use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { motion, Variants, AnimatePresence } from "framer-motion"
-import { Stories, Story } from "@/components/feed/Stories"
+import { Stories } from "@/components/feed/Stories"
+import StoryViewer from "@/components/feed/StoryViewer"
+import CreateStoryModal from "@/components/feed/CreateStoryModal"
 import { FeedSearch } from "@/components/feed/FeedSearch"
 import { FeedTabs } from "@/components/feed/FeedTabs"
 import { FeedLayoutControls } from "@/components/feed/FeedLayoutControls"
@@ -16,7 +18,8 @@ import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
 import { getImageUrl, getInitials } from "@/lib/utils"
 import { getFriendsAction } from "@/lib/actions/friends"
-import { FriendUser } from "@/types"
+import { FriendUser, UserStoryGroup, StoryItem } from "@/types"
+import { INITIAL_STORIES_DATA, getLocalUserStories, markStoryGroupViewed, getViewedStoryIds } from "@/lib/stories"
 
 const containerVariants: Variants = { 
   hidden: { opacity: 0 }, 
@@ -37,7 +40,12 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   const [activeTab, setActiveTab] = useState('Para ti');
   const [layoutStyle, setLayoutStyle] = useState<'grid' | 'list'>('grid');
 
-  // Modales
+  // Historias estilo Instagram
+  const [storyGroups, setStoryGroups] = useState<UserStoryGroup[]>([]);
+  const [activeViewerGroupIndex, setActiveViewerGroupIndex] = useState<number | null>(null);
+  const [isCreateStoryModalOpen, setIsCreateStoryModalOpen] = useState(false);
+
+  // Modales de Post y Comentarios
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [activeCommentPost, setActiveCommentPost] = useState<PostType | null>(null);
   const [commentText, setCommentText] = useState("");
@@ -56,15 +64,71 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       }
     } catch (err) {}
 
-    // Fallback a initialPosts si existen
     if (initialPosts && Array.isArray(initialPosts)) {
       setPosts(initialPosts);
     }
   };
 
-  // Cargar Amigos para Historias Dinámicas
+  // 2. Cargar Historias Dinámicas estilo Instagram
+  const loadStories = useCallback(async () => {
+    try {
+      const res = await fetch('/api/stories');
+      let baseStories: UserStoryGroup[] = INITIAL_STORIES_DATA;
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          baseStories = data.data;
+        }
+      }
+
+      const viewedIds = getViewedStoryIds();
+      const localUserItems = getLocalUserStories();
+
+      // Construir grupo de historia del usuario actual
+      const userGroupIndex = baseStories.findIndex(g => g.isUser || g.username.toLowerCase() === rawUsername);
+      let userStoryGroup: UserStoryGroup;
+
+      if (userGroupIndex >= 0) {
+        userStoryGroup = {
+          ...baseStories[userGroupIndex],
+          isUser: true,
+          items: localUserItems.length > 0 ? [...localUserItems, ...baseStories[userGroupIndex].items] : baseStories[userGroupIndex].items,
+          avatar_url: user?.avatar_url || baseStories[userGroupIndex].avatar_url,
+          name: displayName
+        };
+      } else {
+        userStoryGroup = {
+          id: user?.id || 'my_user_story',
+          username: rawUsername,
+          name: displayName,
+          avatar: getInitials(displayName),
+          avatar_url: user?.avatar_url,
+          isUser: true,
+          hasUnseen: localUserItems.length > 0,
+          items: localUserItems,
+          last_updated: 'Justo ahora'
+        };
+      }
+
+      // Filtrar otros creadores y marcar estado visto
+      const otherGroups = baseStories
+        .filter(g => !g.isUser && g.username.toLowerCase() !== rawUsername)
+        .map(g => ({
+          ...g,
+          hasUnseen: !viewedIds.includes(String(g.id))
+        }));
+
+      setStoryGroups([userStoryGroup, ...otherGroups]);
+    } catch {
+      setStoryGroups(INITIAL_STORIES_DATA);
+    }
+  }, [user, rawUsername, displayName]);
+
+  // Cargar Amigos, Posts e Historias
   useEffect(() => {
     loadPosts();
+    loadStories();
 
     async function loadFriends() {
       try {
@@ -76,32 +140,94 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
     }
 
     loadFriends();
-  }, []);
+  }, [loadStories]);
 
-  // 2. Historias Dinámicas (Usuario Actual + Amigos/Creadores Activos)
-  const stories: Story[] = useMemo(() => {
-    const userStory: Story = {
-      id: 'my_story',
-      handle: 'Tu Historia',
-      name: displayName.split(' ')[0],
-      isUser: true,
-      avatar: getInitials(displayName),
-      avatar_url: user?.avatar_url,
-      viewed: false
-    };
-
-    const friendStories: Story[] = friends.map(f => ({
-      id: f.id,
-      handle: `@${f.username}`,
-      name: f.name || f.username,
-      isUser: false,
-      avatar: getInitials(f.name || f.username),
-      avatar_url: f.avatar_url,
-      viewed: !f.is_online
+  // Manejar cuando se ve una historia
+  const handleStoryGroupViewed = (groupId: string | number) => {
+    markStoryGroupViewed(groupId);
+    setStoryGroups(prev => prev.map(g => {
+      if (g.id === groupId) {
+        return { ...g, hasUnseen: false };
+      }
+      return g;
     }));
 
-    return [userStory, ...friendStories];
-  }, [user, friends, displayName]);
+    try {
+      fetch('/api/stories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'view', groupId })
+      });
+    } catch {}
+  };
+
+  // Manejar Like en Historia
+  const handleLikeStory = (storyId: string, groupId: string | number) => {
+    setStoryGroups(prev => prev.map(g => {
+      if (g.id === groupId) {
+        return {
+          ...g,
+          items: g.items.map(item => {
+            if (item.id === storyId) {
+              const nextLiked = !item.liked;
+              return {
+                ...item,
+                liked: nextLiked,
+                likes: nextLiked ? item.likes + 1 : Math.max(0, item.likes - 1)
+              };
+            }
+            return item;
+          })
+        };
+      }
+      return g;
+    }));
+
+    try {
+      fetch('/api/stories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'like', storyId, groupId })
+      });
+    } catch {}
+  };
+
+  // Manejar eliminación de historia
+  const handleDeleteStory = async (storyId: string, groupId: string | number) => {
+    setStoryGroups(prev => prev.map(g => {
+      if (g.id === groupId) {
+        return {
+          ...g,
+          items: g.items.filter(item => item.id !== storyId)
+        };
+      }
+      return g;
+    }));
+
+    try {
+      fetch('/api/core/stories/' + storyId + '?userId=' + (user?.id || 1), {
+        method: 'DELETE'
+      });
+    } catch {}
+  };
+
+  // Manejar nueva historia creada por el usuario
+  const handleStoryCreated = (newStory: StoryItem) => {
+    setStoryGroups(prev => {
+      const userGroupIdx = prev.findIndex(g => g.isUser);
+      if (userGroupIdx >= 0) {
+        const updated = [...prev];
+        updated[userGroupIdx] = {
+          ...updated[userGroupIdx],
+          items: [newStory, ...updated[userGroupIdx].items],
+          hasUnseen: true,
+          last_updated: 'Justo ahora'
+        };
+        return updated;
+      }
+      return prev;
+    });
+  };
 
   // 3. Manejo de Likes Dinámico
   const toggleLike = async (postId: string | number) => {
@@ -240,13 +366,19 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
         }} 
       />
       
-      {/* 2. Historias Dinámicas */}
+      {/* 2. Historias Dinámicas estilo Instagram */}
       <Stories 
-        stories={stories} 
-        onStoryClick={(story) => {
-          toast.info(`Viendo la historia de ${story.handle}`);
+        stories={storyGroups} 
+        onStoryClick={(storyGroup) => {
+          const validGroups = storyGroups.filter(g => g.items && g.items.length > 0);
+          const targetIndex = validGroups.findIndex(g => g.id === storyGroup.id);
+          if (targetIndex >= 0) {
+            setActiveViewerGroupIndex(targetIndex);
+          } else if (storyGroup.isUser) {
+            setIsCreateStoryModalOpen(true);
+          }
         }} 
-        onAddStory={() => setIsCreateModalOpen(true)}
+        onAddStory={() => setIsCreateStoryModalOpen(true)}
       />
 
       {/* 3. BARRA CREADORA SUPERIOR (Estilo Facebook / X / LinkedIn) */}
@@ -425,6 +557,30 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 8. MODAL DE CREAR HISTORIA 9:16 (Estilo Instagram) */}
+      <CreateStoryModal
+        isOpen={isCreateStoryModalOpen}
+        onClose={() => setIsCreateStoryModalOpen(false)}
+        onStoryCreated={handleStoryCreated}
+      />
+
+      {/* 9. VISOR INMERSIVO DE HISTORIAS (Estilo Instagram) */}
+      {activeViewerGroupIndex !== null && (
+        <StoryViewer
+          storyGroups={storyGroups.filter(g => g.items && g.items.length > 0)}
+          initialGroupIndex={Math.min(
+            activeViewerGroupIndex,
+            Math.max(0, storyGroups.filter(g => g.items && g.items.length > 0).length - 1)
+          )}
+          onClose={() => setActiveViewerGroupIndex(null)}
+          onStoryGroupViewed={handleStoryGroupViewed}
+          onLikeStory={handleLikeStory}
+          onSendReply={(groupId, storyId, message) => {
+            toast.success("Mensaje enviado con éxito");
+          }}
+        />
+      )}
 
     </motion.div>
   );

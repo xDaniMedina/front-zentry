@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { fetchExplorePosts, searchExplore } from "@/lib/actions/explore";
 
 type TrendingItem = {
   rank: number;
@@ -108,24 +109,21 @@ export default function ExploreClient({ initialTrending }: { initialTrending?: I
   useEffect(() => {
     async function loadDynamicExplore() {
       try {
-        const postsRes = await fetch('/api/posts');
-        if (postsRes.ok) {
-          const postsData = await postsRes.json();
-          if (postsData.success && Array.isArray(postsData.data)) {
-            const mappedArts: ArtResult[] = postsData.data.map((p: any) => ({
-              id: String(p.id),
-              title: p.title,
-              author: p.author,
-              handle: p.handle,
-              category: p.tags && p.tags.length > 0 ? p.tags[0].replace('#', '') : 'Arte Digital',
-              likes: p.likes || 0,
-              comments: p.comments || 0,
-              imageUrl: p.media_url,
-              color: 'from-purple-600/30 to-indigo-600/30',
-              year: 2026
-            }));
-            setArtsList(mappedArts);
-          }
+        const postsData = await fetchExplorePosts();
+        if (postsData.success && Array.isArray(postsData.data)) {
+          const mappedArts: ArtResult[] = postsData.data.map((p: any) => ({
+            id: String(p.id),
+            title: p.title,
+            author: p.author,
+            handle: p.handle,
+            category: p.tags && p.tags.length > 0 ? p.tags[0].replace('#', '') : 'Arte Digital',
+            likes: p.likes || 0,
+            comments: p.comments || 0,
+            imageUrl: p.media_url,
+            color: 'from-purple-600/30 to-indigo-600/30',
+            year: 2026
+          }));
+          setArtsList(mappedArts);
         }
       } catch {}
     }
@@ -139,12 +137,10 @@ export default function ExploreClient({ initialTrending }: { initialTrending?: I
 
     const timer = setTimeout(async () => {
       try {
-        const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-        const response = await fetch(`${apiBase}/api/core/search?query=${encodeURIComponent(searchQuery)}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.users) setUsersList(data.users);
-          if (data.arts) setArtsList(data.arts);
+        const data = await searchExplore(searchQuery);
+        if (data.success) {
+          if (data.users && data.users.length > 0) setUsersList(data.users);
+          if (data.arts && data.arts.length > 0) setArtsList(data.arts);
         }
       } catch (err) {
         // Fallback local silencioso

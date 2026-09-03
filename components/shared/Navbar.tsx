@@ -4,10 +4,10 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { Sparkles, Home, Wand2, User, LogOut, Bell, Menu, X } from 'lucide-react'
 import { logout } from '@/lib/actions/auth'
-import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { User as GlobalUser } from '@/types'
 
 interface NavbarProps {
-  user: SupabaseUser
+  user: GlobalUser
 }
 
 export default function Navbar({ user }: NavbarProps) {

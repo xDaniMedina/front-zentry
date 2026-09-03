@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { FeedCard, PostType } from "@/components/feed/FeedCard"; 
+import { FeedCard, PostType } from "@/components/feed/FeedCard";
 import { useAuth } from "@/context/AuthContext";
+import { joinCommunityAction, leaveCommunityAction, updateCommunityConfigAction } from "@/lib/actions/communities";
 
 type CommunityDetails = {
   id?: string;
@@ -113,7 +114,7 @@ export default function CommunityDetailClient({ slug, initialData }: { slug: str
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   const [feedSort, setFeedSort] = useState<'hot' | 'new'>('hot');
-  const isAdmin = user ? (user.username.toLowerCase() === ownerUsername.toLowerCase() || ownerUsername === 'admin') : true;
+  const isAdmin = user && user.username ? (user.username.toLowerCase() === ownerUsername.toLowerCase() || ownerUsername === 'admin') : false;
 
   // Manejador de Notificaciones
   const handleToggleNotifications = () => {
@@ -126,8 +127,9 @@ export default function CommunityDetailClient({ slug, initialData }: { slug: str
     }
   };
 
-  const toggleLike = (postId: number) => {
-    setLikedPosts(prev => prev.includes(postId) ? prev.filter(id => id !== postId) : [...prev, postId]);
+  const toggleLike = (postId: string | number) => {
+    const id = Number(postId);
+    setLikedPosts(prev => prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]);
   };
 
   const handleToggleJoin = async () => {
@@ -137,17 +139,8 @@ export default function CommunityDetailClient({ slug, initialData }: { slug: str
     toast.success(nextState ? `Te has unido a c/${slug}` : `Has salido de c/${slug}`);
 
     try {
-      const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
-      const clientToken = tokenMatch ? tokenMatch[2] : null;
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-
       if (communityId) {
-        await fetch(`${apiBase}/api/core/communities/${communityId}/${nextState ? 'join' : 'leave'}`, {
-          method: 'POST',
-          headers: {
-            ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-          }
-        });
+        await (nextState ? joinCommunityAction(communityId) : leaveCommunityAction(communityId));
       }
     } catch (err) {
       console.error("Error al cambiar estado de membresía:", err);
@@ -225,23 +218,15 @@ export default function CommunityDetailClient({ slug, initialData }: { slug: str
     setIsSavingConfig(true);
 
     try {
-      const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
-      const clientToken = tokenMatch ? tokenMatch[2] : null;
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-
       const formData = new FormData();
       formData.append('description', editDesc);
       formData.append('rules', JSON.stringify(editRules));
       if (newAvatarFile) formData.append('avatar', newAvatarFile);
       if (newBannerFile) formData.append('banner', newBannerFile);
 
-      await fetch(`${apiBase}/api/core/communities/${communityId}`, {
-        method: 'PUT',
-        headers: {
-          ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-        },
-        body: formData
-      });
+      if (communityId) {
+        await updateCommunityConfigAction(communityId, formData);
+      }
 
       setDescription(editDesc);
       setRules(editRules);
@@ -483,7 +468,7 @@ export default function CommunityDetailClient({ slug, initialData }: { slug: str
               <FeedCard 
                 key={post.id}
                 post={post}
-                isLiked={likedPosts.includes(post.id)}
+                isLiked={likedPosts.includes(Number(post.id))}
                 onLike={toggleLike}
                 isListMode={true}
               />

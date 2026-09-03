@@ -14,12 +14,11 @@ import { useAuth } from "@/context/AuthContext";
 import { 
   DailyMission, 
   AchievementItem, 
-  getUserDailyMissions, 
   saveUserDailyMissionsState, 
-  getUserAchievements,
   saveUserAchievementsState,
   getTodayDateString 
 } from "@/lib/gamification";
+import { fetchDailyMissions, fetchAchievements, claimMission, claimAchievement } from "@/lib/actions/gamification";
 
 export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -38,8 +37,15 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
 
   useEffect(() => {
     if (mounted) {
-      setMissions(getUserDailyMissions(userKey));
-      setAchievements(getUserAchievements(userKey));
+      const loadGamification = async () => {
+        const [missionsRes, achievementsRes] = await Promise.all([
+          fetchDailyMissions(),
+          fetchAchievements()
+        ]);
+        if (missionsRes.success) setMissions(missionsRes.missions);
+        if (achievementsRes.success) setAchievements(achievementsRes.achievements);
+      };
+      loadGamification();
     }
   }, [mounted, userKey]);
 
@@ -64,34 +70,40 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
     };
   }, [isOpen, mounted, onClose]);
 
-  const claimMissionReward = (id: string, coins: number) => {
-    const updated = missions.map(m => m.id === id ? { ...m, isClaimed: true } : m);
-    setMissions(updated);
-    saveUserDailyMissionsState(updated, userKey);
+  const claimMissionReward = async (id: string, coins: number) => {
+    const res = await claimMission(id);
+    if (res.success) {
+      const updated = missions.map(m => m.id === id ? { ...m, isClaimed: true } : m);
+      setMissions(updated);
 
-    // Verificar si desbloquea logro secreto de reclamar recompensas
-    const claimedCount = updated.filter(m => m.isClaimed).length;
-    if (claimedCount >= 3) {
-      unlockAchievement('ach_secret_master_key');
+      // Verificar si desbloquea logro secreto de reclamar recompensas
+      const claimedCount = updated.filter(m => m.isClaimed).length;
+      if (claimedCount >= 3) {
+        unlockAchievement('ach_secret_master_key');
+      }
+
+      toast.success(`¡Recompensa reclamada! +${coins} Zentry Coins para @${user?.username || 'ti'} 🎉`);
+    } else {
+      toast.error("Hubo un problema al reclamar tu recompensa.");
     }
-
-    toast.success(`¡Recompensa reclamada! +${coins} Zentry Coins para @${user?.username || 'ti'} 🎉`);
   };
 
-  const unlockAchievement = (id: string) => {
-    const updated = achievements.map(a => {
-      if (a.id === id && !a.isUnlocked) {
-        toast.success(`✨ ¡LOGRO MISTERIOSO DESBLOQUEADO: ${a.title}! +${a.rewardCoins} ZC`);
-        return {
-          ...a,
-          isUnlocked: true,
-          unlockedDate: '¡Recién descubierto!'
-        };
-      }
-      return a;
-    });
-    setAchievements(updated);
-    saveUserAchievementsState(updated, userKey);
+  const unlockAchievement = async (id: string) => {
+    const res = await claimAchievement(id);
+    if (res.success) {
+      const updated = achievements.map(a => {
+        if (a.id === id && !a.isUnlocked) {
+          toast.success(`✨ ¡LOGRO MISTERIOSO DESBLOQUEADO: ${a.title}! +${a.rewardCoins} ZC`);
+          return {
+            ...a,
+            isUnlocked: true,
+            unlockedDate: '¡Recién descubierto!'
+          };
+        }
+        return a;
+      });
+      setAchievements(updated);
+    }
   };
 
   const totalMissionsCompleted = missions.filter(m => m.currentProgress >= m.targetProgress).length;

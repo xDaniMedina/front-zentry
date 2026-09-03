@@ -16,7 +16,8 @@ export default function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Bloqueo de scroll y tecla Escape
@@ -42,15 +43,12 @@ export default function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
   const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await logout();
-      document.cookie = "zentry_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax;";
       localStorage.removeItem("zentry_user");
+      await logout();
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
-    }
-    setTimeout(() => {
       window.location.href = "/login";
-    }, 700);
+    }
   };
 
   if (!mounted) return null;

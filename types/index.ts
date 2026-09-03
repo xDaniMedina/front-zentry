@@ -254,6 +254,7 @@ export interface StudioProject {
   reward?: number
   content?: string
   thumbnail_url?: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: Record<string, any>
   created_at?: string
 }
@@ -321,10 +322,17 @@ export interface Project {
 }
 
 export interface User {
-  id: string
+  id: string | number
   email: string
   username?: string
   name?: string
+  avatar_url?: string
+  banner_url?: string
+  discipline?: string
+  bio?: string
+  location?: string
+  followersCount?: number
+  postsCount?: number
   profile?: Profile | null
   created_at?: string
   updated_at?: string
@@ -358,3 +366,6 @@ export interface FriendUser {
   mutual_friends_count?: number
   project_title?: string
 }
+
+export * from './stories';
+

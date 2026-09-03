@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Search, Loader2, X, TrendingUp, Sparkles, Hash } from "lucide-react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
+import { searchProfilesAction } from "@/lib/actions/profile"
 
 type SearchResult = {
   username: string;
@@ -44,22 +45,8 @@ export function FeedSearch({
     const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const tokenMatch = typeof document !== 'undefined' ? document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)')) : null;
-        const clientToken = tokenMatch ? tokenMatch[2] : null;
-
-        const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-        const response = await fetch(`${apiBase}/api/core/profiles/search?q=${encodeURIComponent(query)}`, {
-          headers: {
-            ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setResults(Array.isArray(data) ? data : []);
-        } else {
-          setResults([]);
-        }
+        const result = await searchProfilesAction(query);
+        setResults(result.success ? result.data : []);
       } catch (error) {
         setResults([]);
       } finally {

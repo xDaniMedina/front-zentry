@@ -1,4 +1,4 @@
-﻿'use server'
+'use server'
 
 import { fetchAPI } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
@@ -38,6 +38,7 @@ export async function sendFriendRequestAction(
   message?: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body: Record<string, any> = { message: message || '' }
     if (typeof targetUserIdOrUsername === 'number' || !isNaN(Number(targetUserIdOrUsername))) {
       body.target_user_id = Number(targetUserIdOrUsername)
@@ -109,7 +110,7 @@ export async function pingPresenceAction(status: string = 'online'): Promise<voi
     await fetchAPI(`/api/core/friends/presence/ping?status=${encodeURIComponent(status)}`, {
       method: 'POST',
     })
-  } catch (ignored) {}
+  } catch { /* ignore */ }
 }
 
 

@@ -9,10 +9,11 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/components/providers/ThemeProvider";
+import { updateProfile, updateSecurity } from "@/lib/actions/settings";
 import Link from "next/link";
 
 export default function SettingsClient() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'notifications' | 'appearance' | 'account'>('profile');
@@ -42,20 +43,31 @@ export default function SettingsClient() {
   const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("¡Perfil actualizado correctamente!");
+    const res = await updateProfile({ displayName, bio, website, email });
+    if (res.success) {
+      toast.success("¡Perfil actualizado correctamente!");
+      updateUser({ name: displayName, bio, email });
+    } else {
+      toast.error("Error al actualizar perfil.");
+    }
   };
 
-  const handleSaveSecurity = (e: React.FormEvent) => {
+  const handleSaveSecurity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPass || !newPass) {
       toast.error("Por favor, completa los campos de contraseña.");
       return;
     }
-    toast.success("Contraseña cambiada con éxito.");
-    setCurrentPass("");
-    setNewPass("");
+    const res = await updateSecurity({ currentPass, newPass });
+    if (res.success) {
+      toast.success("Contraseña cambiada con éxito.");
+      setCurrentPass("");
+      setNewPass("");
+    } else {
+      toast.error("Error al cambiar contraseña.");
+    }
   };
 
   return (

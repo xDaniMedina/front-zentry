@@ -9,8 +9,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { subscribeToPlanAction, sendCoinsAction, topupCoinsAction } from "@/lib/actions/wallet";
 
-export type Transaction = { 
+export type WalletTransaction = { 
   id: string; 
   type: 'ingreso' | 'egreso' | 'recarga'; 
   amount: number; 
@@ -34,7 +35,7 @@ export type WalletData = {
   balance: number; 
   activePlanId: string;
   nextBillingDate: string;
-  transactions: Transaction[]; 
+  transactions: WalletTransaction[]; 
 }
 
 const FALLBACK_WALLET: WalletData = {
@@ -140,18 +141,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
     }
 
     try {
-      const tokenMatch = document.cookie.match(new RegExp('(^| )zentry_token=([^;]+)'));
-      const clientToken = tokenMatch ? tokenMatch[2] : null;
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-
-      await fetch(`${apiBase}/api/core/wallet/subscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(clientToken ? { 'Authorization': `Bearer ${clientToken}` } : {})
-        },
-        body: JSON.stringify({ planId: selectedPlanForModal.id, cycle: billingCycle })
-      });
+      await subscribeToPlanAction(selectedPlanForModal.id, billingCycle);
 
       setData(prev => ({
         ...prev,
@@ -180,7 +170,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
   };
 
   // Enviar Zentry Coins
-  const handleSendCoins = (e: React.FormEvent) => {
+  const handleSendCoins = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = Number(sendAmount);
     if (!sendRecipient || !amountNum || amountNum <= 0) {
@@ -192,46 +182,56 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
       return;
     }
 
-    setData(prev => ({
-      ...prev,
-      balance: prev.balance - amountNum,
-      transactions: [
-        {
-          id: `t-${Date.now()}`,
-          type: 'egreso',
-          amount: amountNum,
-          description: `Transferencia enviada a @${sendRecipient.replace('@', '')}`,
-          date: 'Justo ahora'
-        },
-        ...prev.transactions
-      ]
-    }));
+    const res = await sendCoinsAction(sendRecipient, amountNum);
+    if (res.success) {
+      setData(prev => ({
+        ...prev,
+        balance: prev.balance - amountNum,
+        transactions: [
+          {
+            id: `t-${Date.now()}`,
+            type: 'egreso',
+            amount: amountNum,
+            description: `Transferencia enviada a @${sendRecipient.replace('@', '')}`,
+            date: 'Justo ahora'
+          },
+          ...prev.transactions
+        ]
+      }));
 
-    toast.success(`¡Enviados ${amountNum} ZC a @${sendRecipient}!`);
-    setSendRecipient("");
-    setSendAmount("");
-    setActiveModal(null);
+      toast.success(`¡Enviados ${amountNum} ZC a @${sendRecipient}!`);
+      setSendRecipient("");
+      setSendAmount("");
+      setActiveModal(null);
+    } else {
+      toast.error("Error al enviar monedas. Intenta de nuevo.");
+    }
   };
 
   // Recargar Saldo
-  const handleTopup = () => {
-    setData(prev => ({
-      ...prev,
-      balance: prev.balance + topupAmount,
-      transactions: [
-        {
-          id: `t-${Date.now()}`,
-          type: 'recarga',
-          amount: topupAmount,
-          description: `Recarga de saldo en Billetera`,
-          date: 'Justo ahora'
-        },
-        ...prev.transactions
-      ]
-    }));
+  const handleTopup = async () => {
+    const res = await topupCoinsAction(topupAmount);
+    if (res.success) {
+      setData(prev => ({
+        ...prev,
+        balance: prev.balance + topupAmount,
+        transactions: [
+          {
+            id: `t-${Date.now()}`,
+            type: 'recarga',
+            amount: topupAmount,
+            description: `Recarga de saldo en Billetera`,
+            date: 'Justo ahora'
+          },
+          ...prev.transactions
+        ]
+      }));
 
-    toast.success(`¡Recarga exitosa! Se añadieron +${topupAmount} ZC a tu balance`);
-    setActiveModal(null);
+      toast.success(`¡Recarga exitosa! Se añadieron +${topupAmount} ZC a tu balance`);
+      setActiveModal(null);
+    } else {
+      toast.error("Error al recargar saldo. Intenta de nuevo.");
+    }
   };
 
   return (

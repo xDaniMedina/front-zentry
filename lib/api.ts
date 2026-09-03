@@ -12,9 +12,10 @@ export async function fetchAPI(endpoint: string, options: FetchOptions = {}) {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('zentry_token')?.value;
-    
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...options.headers,
     };
@@ -55,7 +56,7 @@ export async function fetchAPI(endpoint: string, options: FetchOptions = {}) {
     } catch {
       return { success: true, text };
     }
-  } catch (error: any) {
+  } catch {
     // Si la conexión falló o hubo timeout, retornar null rápidamente sin bloquear
     return null;
   }

@@ -43,3 +43,73 @@ export async function joinCommunityAction(communityId: string) {
     return { success: false }
   }
 }
+
+export async function leaveCommunityAction(communityId: string) {
+  try {
+    const res = await fetchAPI(`/api/core/communities/${communityId}/leave`, {
+      method: 'POST',
+    })
+    revalidatePath('/communities')
+    return { success: !!res }
+  } catch (error) {
+    console.error('Error al salir de la comunidad:', error)
+    return { success: false }
+  }
+}
+
+type CommunityPayload = { name: string; description: string; slug: string; category: string }
+
+export async function createCommunityAction(payload: CommunityPayload) {
+  try {
+    const res = await fetchAPI('/api/core/communities', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    revalidatePath('/communities')
+    return { success: !!res, data: res }
+  } catch (error) {
+    console.error('Error al crear la comunidad:', error)
+    return { success: false }
+  }
+}
+
+export async function updateCommunityAction(communityId: string, payload: CommunityPayload) {
+  try {
+    const res = await fetchAPI(`/api/core/communities/${communityId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+    revalidatePath('/communities')
+    return { success: !!res, data: res }
+  } catch (error) {
+    console.error('Error al actualizar la comunidad:', error)
+    return { success: false }
+  }
+}
+
+export async function deleteCommunityAction(communityId: string) {
+  try {
+    const res = await fetchAPI(`/api/core/communities/${communityId}`, {
+      method: 'DELETE',
+    })
+    revalidatePath('/communities')
+    return { success: !!res }
+  } catch (error) {
+    console.error('Error al eliminar la comunidad:', error)
+    return { success: false }
+  }
+}
+
+export async function updateCommunityConfigAction(communityId: string, formData: FormData) {
+  try {
+    const res = await fetchAPI(`/api/core/communities/${communityId}`, {
+      method: 'PUT',
+      body: formData,
+    })
+    revalidatePath(`/communities/${communityId}`)
+    return { success: !!res, data: res }
+  } catch (error) {
+    console.error('Error al guardar configuración de la comunidad:', error)
+    return { success: false }
+  }
+}

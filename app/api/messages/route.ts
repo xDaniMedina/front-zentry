@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { Message } from '@/types';
+import { hasValidSession } from '@/lib/session';
 
 // Almacenamiento en memoria en el servidor Next.js
 declare global {
@@ -32,6 +33,10 @@ function getChannelKey(u1: string, u2: string): string {
 
 // GET: Obtener mensajes de un canal o todos los mensajes de un usuario
 export async function GET(req: NextRequest) {
+  if (!(await hasValidSession())) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const u1 = searchParams.get('u1') || searchParams.get('sender');
   const u2 = searchParams.get('u2') || searchParams.get('receiver');
@@ -66,6 +71,10 @@ export async function GET(req: NextRequest) {
 
 // POST: Enviar / Guardar un nuevo mensaje entre usuarios
 export async function POST(req: NextRequest) {
+  if (!(await hasValidSession())) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { 
@@ -118,13 +127,17 @@ export async function POST(req: NextRequest) {
     messageStore.set(key, updated);
 
     return NextResponse.json({ success: true, channelKey: key, message: newMsg, messages: updated });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as any).message }, { status: 500 });
   }
 }
 
 // PUT: Marcar leídos o agregar reacciones
 export async function PUT(req: NextRequest) {
+  if (!(await hasValidSession())) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { action, channelKey, u1, u2, username, messageId, emoji } = body;
@@ -179,13 +192,17 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ success: false, error: 'Acción no válida' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as any).message }, { status: 500 });
   }
 }
 
 // DELETE: Eliminar mensaje
 export async function DELETE(req: NextRequest) {
+  if (!(await hasValidSession())) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const messageId = searchParams.get('messageId');
@@ -202,7 +219,7 @@ export async function DELETE(req: NextRequest) {
     messageStore.set(channelKey, updated);
 
     return NextResponse.json({ success: true, messages: updated });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as any).message }, { status: 500 });
   }
 }

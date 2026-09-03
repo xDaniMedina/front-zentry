@@ -3,10 +3,14 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, Mail, Lock, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { register } from "@/lib/actions/auth";
 
 export default function RegisterPage() {
-  const {loginState} = useAuth();
+  const { loginState } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -21,25 +25,19 @@ export default function RegisterPage() {
     setErrorMsg("");
 
     try {
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080').replace(/\/$/, "");
-      const response = await fetch(`${apiBase}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      const fd = new FormData();
+      fd.set('username', formData.username);
+      fd.set('email', formData.email);
+      fd.set('password', formData.password);
 
-      if (response.ok) {
-        const data = await response.json();
-        const userObj = {
-          id: data.id,
-          username: data.username,
-          email: data.email
-        };
-        alert("¡Cuenta creada con éxito! Bienvenido a Zentry.");
-        loginState(userObj, data.token);
-        //window.location.href = "/login"; // Redirige al login tras registrarse
+      const result = await register(fd);
+
+      if (result.success) {
+        toast.success("¡Cuenta creada con éxito! Bienvenido a Zentry.");
+        loginState(result.user);
+        router.push('/onboarding');
       } else {
-        setErrorMsg("Hubo un problema al crear la cuenta. Verifica los datos.");
+        setErrorMsg(result.message || "Hubo un problema al crear la cuenta. Verifica los datos.");
       }
     } catch (error) {
       console.error("Error de conexión:", error);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { hasValidSession } from '@/lib/session';
 
 export interface FeedPost {
   id: string | number;
@@ -128,6 +129,10 @@ export async function GET() {
 
 // POST: Crear nuevo post multimedia
 export async function POST(req: NextRequest) {
+  if (!(await hasValidSession())) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const {
@@ -178,13 +183,17 @@ export async function POST(req: NextRequest) {
     postsStore.unshift(newPost);
 
     return NextResponse.json({ success: true, data: newPost });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as any).message }, { status: 500 });
   }
 }
 
 // PUT: Likes y Comentarios
 export async function PUT(req: NextRequest) {
+  if (!(await hasValidSession())) {
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { action, postId, username, commentText, authorName } = body;
@@ -226,7 +235,7 @@ export async function PUT(req: NextRequest) {
     }
 
     return NextResponse.json({ success: false, error: 'Acción inválida' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as any).message }, { status: 500 });
   }
 }

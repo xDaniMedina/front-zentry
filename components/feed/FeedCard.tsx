@@ -26,10 +26,10 @@ export type PostType = {
   avatar?: string;
   avatar_url?: string;
   discipline?: string;
-  created_at: string;
+  created_at?: string;
   title: string;
   description?: string;
-  media_type: 'image' | 'video' | 'audio' | 'text';
+  media_type?: 'image' | 'video' | 'audio' | 'text';
   media_url?: string;
   likes: number;
   comments: number;
@@ -37,6 +37,8 @@ export type PostType = {
   comments_list?: CommentItem[];
   liked_by?: string[];
   saved_by?: string[];
+  height?: string;
+  color?: string;
 };
 
 interface FeedCardProps {

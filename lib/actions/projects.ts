@@ -2,8 +2,9 @@
 
 import { fetchAPI } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
-import { Project, ProjectTask, ProjectComment, ProjectMember } from '@/types'
+import { Project, ProjectTask, ProjectComment, ProjectMember, ProjectCategory, ProjectPriority } from '@/types'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBackendToProject(p: any): Project {
   if (!p) return {} as Project;
 
@@ -15,6 +16,7 @@ function mapBackendToProject(p: any): Project {
   const status = p.status === 'completed' ? 'completed' : p.status === 'paused' ? 'paused' : 'active';
 
   const rawTasks = Array.isArray(p.tasks) ? p.tasks : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tasks: ProjectTask[] = rawTasks.map((t: any, idx: number) => ({
     id: String(t.id || `t-${idx}`),
     title: t.title || 'Tarea',
@@ -42,8 +44,8 @@ function mapBackendToProject(p: any): Project {
     title,
     name: title,
     description,
-    category: category as any,
-    priority: priority as any,
+    category: category as ProjectCategory,
+    priority: priority as ProjectPriority,
     progress,
     status,
     updatedAt: p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : 'Reciente',
@@ -232,6 +234,7 @@ export async function deleteTaskAction(
 export async function addResourceAction(
   projectId: string | number,
   payload: { name: string; type: string; size: string; url?: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ success: boolean; data?: any }> {
   try {
     const res = await fetchAPI(`/api/core/projects/${projectId}/resources`, {
@@ -250,6 +253,7 @@ export async function addResourceAction(
 export async function addNoteAction(
   projectId: string | number,
   content: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ success: boolean; data?: any }> {
   try {
     const res = await fetchAPI(`/api/core/projects/${projectId}/notes`, {
@@ -287,11 +291,11 @@ export async function addProjectCommentAction(
   }
 }
 
-export async function toggleProjectLikeAction(projectId: string | number): Promise<{ success: boolean; isLiked?: boolean }> {
+export async function toggleProjectLikeAction(_projectId: string | number): Promise<{ success: boolean; isLiked?: boolean }> {
   return { success: true, isLiked: true }
 }
 
-export async function joinProjectAction(projectId: string | number): Promise<{ success: boolean }> {
+export async function joinProjectAction(_projectId: string | number): Promise<{ success: boolean }> {
   return { success: true }
 }
 

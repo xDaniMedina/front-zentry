@@ -1,68 +1,133 @@
 "use client"
 
+import { useRef } from "react"
 import { motion } from "framer-motion"
-import { Plus } from "lucide-react"
-import { getInitials, getImageUrl } from "@/lib/utils"
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react"
+import { getInitials, getImageUrl, cn } from "@/lib/utils"
+import { UserStoryGroup } from "@/types/stories"
 
-export type Story = {
-  id: string | number;
-  handle: string;
-  name?: string;
-  isUser: boolean;
-  avatar: string;
-  avatar_url?: string;
-  viewed: boolean;
+interface StoriesProps {
+  stories: UserStoryGroup[];
+  currentUserId?: string;
+  onStoryClick: (storyGroup: UserStoryGroup, initialItemIndex?: number) => void;
+  onAddStory: () => void;
 }
 
 export function Stories({ 
   stories, 
   onStoryClick,
   onAddStory
-}: { 
-  stories: Story[], 
-  onStoryClick: (story: Story) => void,
-  onAddStory?: () => void
-}) {
-  return (
-    <div className="flex gap-3 sm:gap-4 overflow-x-auto custom-scrollbar touch-pan-x mb-4 sm:mb-6 pb-2 w-full select-none">
-      {stories.map((story) => (
-        <div 
-          key={story.id} 
-          onClick={() => {
-            if (story.isUser && onAddStory) {
-              onAddStory();
-            } else {
-              onStoryClick(story);
-            }
-          }}
-          className="flex flex-col items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 group select-none active:scale-95 transition-transform"
-        >
-          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-0.5 sm:p-1 transition-all ${
-            story.isUser 
-              ? 'bg-gradient-to-tr from-zentry-accent via-indigo-500 to-purple-500 shadow-md shadow-zentry-accent/20' 
-              : story.viewed 
-                ? 'bg-zentry-border' 
-                : 'bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600'
-          }`}>
-            <div className="w-full h-full bg-zentry-card rounded-full border-2 border-zentry-bg flex items-center justify-center text-xs sm:text-sm font-black text-zentry-text-1 group-hover:scale-95 transition-transform relative overflow-hidden">
-              {story.avatar_url ? (
-                <img src={getImageUrl(story.avatar_url)} alt={story.handle} className="w-full h-full object-cover rounded-full" />
-              ) : (
-                story.avatar || getInitials(story.name || story.handle)
-              )}
+}: StoriesProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-              {story.isUser && (
-                <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-zentry-accent text-white flex items-center justify-center border-2 border-zentry-bg shadow-sm">
-                  <Plus className="w-3 h-3 stroke-[3]" />
-                </span>
-              )}
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const offset = direction === 'left' ? -260 : 260;
+      scrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <div className="relative group/stories w-full mb-6 select-none">
+      {/* Botón de Scroll Izquierdo (Desktop) */}
+      <button 
+        onClick={() => scroll('left')}
+        aria-label="Historias anteriores"
+        className="hidden md:flex absolute -left-3 top-7 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-zentry-card/90 border border-zentry-border shadow-lg shadow-black/20 items-center justify-center text-zentry-text-2 hover:text-zentry-text-1 hover:scale-110 active:scale-95 transition-all opacity-0 group-hover/stories:opacity-100 backdrop-blur-md"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+
+      {/* Contenedor con Scroll Horizontal */}
+      <div 
+        ref={scrollRef}
+        className="flex gap-4 sm:gap-5 overflow-x-auto custom-scrollbar touch-pan-x py-1 px-1 w-full scroll-smooth no-scrollbar"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {stories.map((story) => {
+          const hasStories = story.items && story.items.length > 0;
+          const isUser = story.isUser;
+
+          return (
+            <div 
+              key={story.id} 
+              className="flex flex-col items-center gap-1.5 cursor-pointer shrink-0 group select-none relative"
+            >
+              {/* Anillo de Gradiente estilo Instagram / Zentry */}
+              <div 
+                onClick={() => {
+                  if (isUser && !hasStories) {
+                    onAddStory();
+                  } else {
+                    onStoryClick(story, 0);
+                  }
+                }}
+                className={cn(
+                  "w-[66px] h-[66px] sm:w-[72px] sm:h-[72px] rounded-full p-[2.5px] sm:p-[3px] transition-transform duration-200 group-hover:scale-105 active:scale-95 relative",
+                  isUser
+                    ? hasStories
+                      ? "bg-gradient-to-tr from-cyan-400 via-indigo-500 to-fuchsia-500 shadow-md shadow-indigo-500/20"
+                      : "border-2 border-dashed border-zentry-border hover:border-zentry-accent"
+                    : story.hasUnseen
+                      ? "bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-md shadow-rose-500/20 animate-pulse-slow"
+                      : "bg-zentry-border/70"
+                )}
+              >
+                {/* Avatar Interior */}
+                <div className="w-full h-full bg-zentry-bg rounded-full p-[2px]">
+                  <div className="w-full h-full bg-zentry-card rounded-full flex items-center justify-center text-xs sm:text-sm font-black text-zentry-text-1 relative overflow-hidden">
+                    {story.avatar_url ? (
+                      <img 
+                        src={getImageUrl(story.avatar_url)} 
+                        alt={story.name || story.username} 
+                        className="w-full h-full object-cover rounded-full" 
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span>{story.avatar || getInitials(story.name || story.username)}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botón '+' en la Historia del Usuario */}
+                {isUser && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddStory();
+                    }}
+                    title="Añadir a tu historia"
+                    className="absolute bottom-0 right-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-zentry-accent hover:bg-zentry-accent/90 text-white flex items-center justify-center border-2 border-zentry-bg shadow-md hover:scale-110 active:scale-90 transition-transform z-10"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                  </button>
+                )}
+              </div>
+
+              {/* Nombre / Handle */}
+              <span className={cn(
+                "text-[11px] font-medium tracking-tight truncate w-16 sm:w-18 text-center transition-colors",
+                isUser 
+                  ? "text-zentry-text-1 font-semibold" 
+                  : story.hasUnseen 
+                    ? "text-zentry-text-1 font-semibold" 
+                    : "text-zentry-text-2 group-hover:text-zentry-text-1"
+              )}>
+                {isUser ? "Tu historia" : (story.name?.split(' ')[0] || story.username)}
+              </span>
             </div>
-          </div>
-          <span className="text-[10px] sm:text-xs font-semibold text-zentry-text-2 truncate w-14 sm:w-16 text-center group-hover:text-zentry-text-1">
-            {story.name || story.handle}
-          </span>
-        </div>
-      ))}
+          );
+        })}
+      </div>
+
+      {/* Botón de Scroll Derecho (Desktop) */}
+      <button 
+        onClick={() => scroll('right')}
+        aria-label="Historias siguientes"
+        className="hidden md:flex absolute -right-3 top-7 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-zentry-card/90 border border-zentry-border shadow-lg shadow-black/20 items-center justify-center text-zentry-text-2 hover:text-zentry-text-1 hover:scale-110 active:scale-95 transition-all opacity-0 group-hover/stories:opacity-100 backdrop-blur-md"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
     </div>
   )
 }

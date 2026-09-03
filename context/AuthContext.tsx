@@ -1,25 +1,12 @@
 "use client"
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { logout as logoutAction } from '@/lib/actions/auth';
 
-export type User = {
-  id: number | string;
-  username: string;
-  name?: string;
-  email: string;
-  avatar_url?: string;
-  banner_url?: string;
-  zentry_coins?: number;
-  followersCount?: number;
-  postsCount?: number;
-  discipline?: string;
-  bio?: string;
-  location?: string;
-};
+import { User } from '@/types';
 
 type AuthContextType = {
   user: User | null;
-  loginState: (userData: User, token: string) => void;
+  loginState: (userData: User) => void;
   updateUser: (userData: Partial<User>) => void;
   logout: () => void;
 };
@@ -28,7 +15,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const router = useRouter();
 
   // Cargar usuario persistido en localStorage
   useEffect(() => {
@@ -58,8 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   
-  // Guardar sesión tras login
-  const loginState = (userData: User, token: string) => {
+  // Guardar sesión tras login (el JWT ya vive en una cookie HTTP-Only seteada por el Server Action)
+  const loginState = (userData: User) => {
     const cleanU = (userData.username || '').replace(/^@/, '').toLowerCase().trim();
     const localAvatar = localStorage.getItem(`zentry_custom_avatar_${cleanU}`);
     const localBanner = localStorage.getItem(`zentry_custom_banner_${cleanU}`);
@@ -72,9 +58,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUser(finalUser);
     localStorage.setItem('zentry_user', JSON.stringify(finalUser));
-    document.cookie = `zentry_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
-    
-    router.push('/feed');
   };
 
   // Actualizar datos del usuario actual
@@ -96,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Cerrar sesión
+  // Cerrar sesión (el Server Action borra la cookie HTTP-Only y redirige)
   const logout = () => {
     if (user?.username) {
       const cleanU = (user.username || '').replace(/^@/, '').toLowerCase().trim();
@@ -113,8 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUser(null);
     localStorage.removeItem('zentry_user');
-    document.cookie = "zentry_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax";
-    router.push('/login');
+    logoutAction();
   };
 
   return (
