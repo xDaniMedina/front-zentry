@@ -2,18 +2,20 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { 
   Grid, Trophy, MapPin, Calendar, Edit3, Settings, Share2, 
   UserPlus, UserCheck, X, LogOut, Loader2, MessageSquare, Lock, 
-  CheckCircle2, Bookmark, Heart, Video, Music, Image as ImageIcon,
-  Play, Sparkles, FolderLock
+  CheckCircle2, Bookmark, Heart, Video, Music, FolderLock
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'sonner';
 import LogoutModal from "@/components/shared/LogoutModal";
-import { ACHIEVEMENTS_POOL } from "@/lib/gamification";
+import { AchievementItem } from "@/lib/gamification";
+import { fetchAchievements } from "@/lib/actions/gamification";
 import { followUserAction, updateProfileAction, updateProfileWithFilesAction } from "@/lib/actions/profile";
+import FollowsModal from "@/components/feed/FollowsModal";
 
 export type ProfileData = {
   username: string;
@@ -67,6 +69,14 @@ export default function ProfileClient({ initialData, username }: { initialData: 
   const [isFollowing, setIsFollowing] = useState(Boolean(initialData?.isFollowing));
   const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'liked' | 'achievements'>('posts');
   const [achievementCategory, setAchievementCategory] = useState<string>('all');
+  const [achievements, setAchievements] = useState<AchievementItem[]>([]);
+
+  useEffect(() => {
+    if (!isCurrentUser) return;
+    fetchAchievements().then(res => {
+      if (res.success) setAchievements(res.achievements);
+    });
+  }, [isCurrentUser]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
 
@@ -105,6 +115,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
   }, [decodedUsername]);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [followsModal, setFollowsModal] = useState<{isOpen: boolean, type: 'followers' | 'following'}>({ isOpen: false, type: 'followers' });
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     name: profile.name || "",
@@ -351,8 +362,18 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
         {/* NÚMEROS DINÁMICOS */}
         <div className="flex gap-4">
-          <p className="text-sm cursor-pointer hover:underline"><span className="font-bold text-zentry-text-1">{profile.followingCount}</span> <span className="text-zentry-text-2">Siguiendo</span></p>
-          <p className="text-sm cursor-pointer hover:underline"><span className="font-bold text-zentry-text-1">{profile.followersCount}</span> <span className="text-zentry-text-2">Seguidores</span></p>
+          <p 
+            onClick={() => setFollowsModal({ isOpen: true, type: 'following' })}
+            className="text-sm cursor-pointer hover:underline"
+          >
+            <span className="font-bold text-zentry-text-1">{profile.followingCount}</span> <span className="text-zentry-text-2">Siguiendo</span>
+          </p>
+          <p 
+            onClick={() => setFollowsModal({ isOpen: true, type: 'followers' })}
+            className="text-sm cursor-pointer hover:underline"
+          >
+            <span className="font-bold text-zentry-text-1">{profile.followersCount}</span> <span className="text-zentry-text-2">Seguidores</span>
+          </p>
         </div>
       </div>
 
@@ -426,7 +447,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                   className="aspect-square bg-zentry-card border border-zentry-border rounded-2xl hover:border-zentry-accent/60 transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between p-3"
                 >
                   {post.media_type === 'image' && post.media_url ? (
-                    <img src={post.media_url} alt={post.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <Image src={post.media_url} alt={post.title} fill sizes="300px" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : post.media_type === 'video' ? (
                     <div className="absolute inset-0 bg-zinc-900 flex items-center justify-center">
                       <Video className="w-10 h-10 text-indigo-400 opacity-60 group-hover:scale-110 transition-transform" />
@@ -495,7 +516,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                   className="aspect-square bg-zentry-card border border-zentry-border rounded-2xl hover:border-amber-400/60 transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between p-3"
                 >
                   {post.media_type === 'image' && post.media_url ? (
-                    <img src={post.media_url} alt={post.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <Image src={post.media_url} alt={post.title} fill sizes="300px" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-amber-950/40 via-zentry-card to-purple-950/40 flex items-center justify-center p-4">
                       <p className="text-xs font-bold text-zentry-text-1 line-clamp-4">{post.title}</p>
@@ -549,7 +570,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                   className="aspect-square bg-zentry-card border border-zentry-border rounded-2xl hover:border-rose-500/60 transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between p-3"
                 >
                   {post.media_type === 'image' && post.media_url ? (
-                    <img src={post.media_url} alt={post.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <Image src={post.media_url} alt={post.title} fill sizes="300px" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-rose-950/40 via-zentry-card to-purple-950/40 flex items-center justify-center p-4">
                       <p className="text-xs font-bold text-zentry-text-1 line-clamp-4">{post.title}</p>
@@ -571,30 +592,39 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         })()}
 
         {/* 4. PESTAÑA: LOGROS */}
-        {activeTab === 'achievements' && (
+        {activeTab === 'achievements' && !isCurrentUser && (
+          <div className="text-center py-16 px-4 bg-zentry-card border border-zentry-border rounded-3xl space-y-3">
+            <FolderLock className="w-12 h-12 text-amber-400/60 mx-auto" />
+            <h3 className="text-base font-extrabold text-zentry-text-1">Logros Privados</h3>
+            <p className="text-xs text-zentry-text-2 max-w-sm mx-auto">
+              Solo @{decodedUsername} puede ver el detalle de sus logros.
+            </p>
+          </div>
+        )}
+        {activeTab === 'achievements' && isCurrentUser && (
           <div className="space-y-5">
             {/* Resumen Superior de Logros del Perfil */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zentry-card p-4 rounded-2xl border border-zentry-border shadow-sm">
               <div className="flex flex-col">
                 <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Total Logros</span>
-                <span className="text-base font-black text-zentry-text-1">{ACHIEVEMENTS_POOL.length}</span>
+                <span className="text-base font-black text-zentry-text-1">{achievements.length}</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Desbloqueados</span>
                 <span className="text-base font-black text-emerald-400">
-                  {ACHIEVEMENTS_POOL.filter(a => a.isUnlocked).length} / {ACHIEVEMENTS_POOL.length}
+                  {achievements.filter(a => a.isUnlocked).length} / {achievements.length}
                 </span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Misterios Revelados</span>
                 <span className="text-base font-black text-pink-400">
-                  {ACHIEVEMENTS_POOL.filter(a => a.rarity === 'mysterious' && a.isUnlocked).length} / {ACHIEVEMENTS_POOL.filter(a => a.rarity === 'mysterious').length}
+                  {achievements.filter(a => a.rarity === 'mysterious' && a.isUnlocked).length} / {achievements.filter(a => a.rarity === 'mysterious').length}
                 </span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] text-zentry-text-2 uppercase font-bold">Recompensas ZC</span>
                 <span className="text-base font-black text-amber-400 font-mono">
-                  +{ACHIEVEMENTS_POOL.filter(a => a.isUnlocked).reduce((sum, a) => sum + a.rewardCoins, 0)} ZC
+                  +{achievements.filter(a => a.isUnlocked).reduce((sum, a) => sum + a.rewardCoins, 0)} ZC
                 </span>
               </div>
             </div>
@@ -630,7 +660,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
             {/* Grid de Tarjetas de Logros */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {ACHIEVEMENTS_POOL.filter(ach => {
+              {achievements.filter(ach => {
                 if (achievementCategory === 'all') return true;
                 if (achievementCategory === 'mysterious') return ach.rarity === 'mysterious';
                 if (achievementCategory === 'unlocked') return ach.isUnlocked;
@@ -698,7 +728,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                         </span>
                       ) : (
                         <span className="text-zentry-text-2 flex items-center gap-1 font-mono text-[11px]">
-                          <Lock className="w-3.5 h-3.5" /> En progreso ({ach.progress || 0}/{ach.maxProgress || 1})
+                          <Lock className="w-3.5 h-3.5" /> {isMysterious ? 'Por descubrir' : 'Bloqueado'}
                         </span>
                       )}
                       <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full border ${rarityBadge}`}>
@@ -820,6 +850,13 @@ export default function ProfileClient({ initialData, username }: { initialData: 
           </div>
         )}
       </AnimatePresence>
+      
+      <FollowsModal 
+        isOpen={followsModal.isOpen} 
+        onClose={() => setFollowsModal(prev => ({ ...prev, isOpen: false }))} 
+        username={decodedUsername} 
+        type={followsModal.type} 
+      />
 
       {/* MODAL PORTAL DE CIERRE DE SESIÓN ANIMADO */}
       <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} />

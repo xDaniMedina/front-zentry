@@ -57,6 +57,19 @@ export async function updateProfileWithFilesAction(formData: FormData) {
   }
 }
 
+export async function getProfileByUserIdAction(userId: number) {
+  try {
+    const res = await fetchAPI(`/api/core/profiles/by-user-id/${userId}`)
+    if (!res) {
+      return { success: false as const }
+    }
+    return { success: true as const, data: res }
+  } catch (error) {
+    console.error(`Error al obtener perfil del usuario ${userId}:`, error)
+    return { success: false as const }
+  }
+}
+
 export async function searchProfilesAction(query: string) {
   try {
     const res = await fetchAPI(`/api/core/profiles/search?q=${encodeURIComponent(query)}`)

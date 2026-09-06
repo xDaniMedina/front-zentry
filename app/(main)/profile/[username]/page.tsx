@@ -1,6 +1,6 @@
 import ProfileClient from "./ProfileCliente";
 import { fetchAPI } from "@/lib/api";
-import { notFound } from "next/navigation"; // 1. Importamos notFound
+// 1. Importamos notFound
 
 type Props = {
   params: Promise<{ username: string }>

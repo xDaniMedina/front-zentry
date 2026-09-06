@@ -24,14 +24,17 @@ export default function LoginPage() {
 
     try {
       const fd = new FormData();
-      fd.set('email', formData.email);
-      fd.set('password', formData.password);
+      fd.set("email", formData.email);
+      fd.set("password", formData.password);
 
+      // El Server Action valida credenciales y, si son correctas, deja el JWT
+      // en una cookie HTTP-Only (nunca en localStorage ni en JS). Si la cuenta
+      // no está verificada, el propio action redirige a /verify.
       const result = await login(fd);
 
       if (result.success) {
         loginState(result.user);
-        router.push('/feed');
+        router.push("/feed");
       } else {
         setErrorMsg(result.message || "Credenciales incorrectas o error en el servidor.");
       }
@@ -45,30 +48,30 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-[#09090b] font-sans">
-      
+
       {/* LADO IZQUIERDO: Branding Zentry (Oculto en móviles) */}
       <div className="hidden lg:flex w-1/2 relative overflow-hidden bg-[#141416] border-r border-white/5 items-center justify-center p-12">
         {/* Efectos de luz traseros */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 blur-[120px] rounded-full" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 blur-[120px] rounded-full" />
-        
+
         <div className="relative z-10 w-full max-w-lg">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
             className="inline-flex items-center gap-3 mb-6"
           >
             <Sparkles className="w-8 h-8 text-white" />
             <span className="text-3xl font-bold text-white tracking-tight">Zentry</span>
           </motion.div>
-          
-          <motion.h2 
+
+          <motion.h2
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl font-bold text-white mb-6 leading-tight"
           >
             Bienvenido de vuelta,<br />creador.
           </motion.h2>
-          
-          <motion.p 
+
+          <motion.p
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.2 }}
             className="text-gray-400 text-lg leading-relaxed"
           >
@@ -93,24 +96,24 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="email" 
-                  placeholder="Correo electrónico" 
+                <input
+                  type="email"
+                  placeholder="Correo electrónico"
                   value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full bg-[#141416] border border-white/5 rounded-2xl pl-12 pr-5 py-4 text-sm text-white outline-none focus:border-white/20 transition-all placeholder:text-gray-600" 
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full bg-[#141416] border border-white/5 rounded-2xl pl-12 pr-5 py-4 text-sm text-white outline-none focus:border-white/20 transition-all placeholder:text-gray-600"
                   required
                 />
               </div>
 
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="password" 
-                  placeholder="Contraseña" 
+                <input
+                  type="password"
+                  placeholder="Contraseña"
                   value={formData.password}
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full bg-[#141416] border border-white/5 rounded-2xl pl-12 pr-5 py-4 text-sm text-white outline-none focus:border-white/20 transition-all placeholder:text-gray-600" 
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full bg-[#141416] border border-white/5 rounded-2xl pl-12 pr-5 py-4 text-sm text-white outline-none focus:border-white/20 transition-all placeholder:text-gray-600"
                   required
                 />
               </div>
@@ -120,8 +123,8 @@ export default function LoginPage() {
                   ¿Olvidaste tu contraseña?
                 </Link>
               </div>
-              
-              <button 
+
+              <button
                 type="submit"
                 disabled={isLoading}
                 className="w-full bg-white text-black font-bold rounded-2xl py-4 hover:bg-gray-200 transition-colors disabled:opacity-50"
@@ -136,7 +139,7 @@ export default function LoginPage() {
           </motion.div>
         </div>
       </div>
-      
+
     </div>
   )
 }

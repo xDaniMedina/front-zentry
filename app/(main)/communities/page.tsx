@@ -1,16 +1,7 @@
-import { fetchAPI } from "@/lib/api";
+import { getCommunities } from "@/lib/actions/communities";
 import CommunitiesClient from "./CommunitiesClient";
 
 export default async function CommunitiesPage() {
-  let communitiesData = null;
-
-  try {
-    communitiesData = await fetchAPI('/api/core/communities');
-  } catch (error) {
-    console.error("El backend no está disponible para Comunidades:", error);
-  }
-
-  return <CommunitiesClient initialData={communitiesData} />;
+  const res = await getCommunities();
+  return <CommunitiesClient initialData={res.data} />;
 }
-
-

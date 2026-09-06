@@ -2,7 +2,7 @@
 import { INITIAL_STORIES_DATA } from '@/lib/stories';
 import { UserStoryGroup, StoryItem } from '@/types/stories';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 // Almacen en memoria fallback para persistencia inmediata en frontend
 let STORIES_STORE: UserStoryGroup[] = JSON.parse(JSON.stringify(INITIAL_STORIES_DATA));

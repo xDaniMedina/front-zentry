@@ -33,9 +33,9 @@ export default function RegisterPage() {
       const result = await register(fd);
 
       if (result.success) {
-        toast.success("¡Cuenta creada con éxito! Bienvenido a Zentry.");
+        toast.success("¡Cuenta creada con éxito! Por favor verifica tu correo electrónico.");
         loginState(result.user);
-        router.push('/onboarding');
+        router.push(`/verify?email=${encodeURIComponent(formData.email)}`);
       } else {
         setErrorMsg(result.message || "Hubo un problema al crear la cuenta. Verifica los datos.");
       }

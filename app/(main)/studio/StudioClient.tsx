@@ -4,13 +4,11 @@ import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import {
-  Wand2, Plus, FileEdit, FolderOpen, Image as ImageIcon,
-  MoreVertical, Video, Music, Coins, X, UploadCloud, CheckCircle2,
+  Wand2, Plus, FileEdit, FolderOpen, Image as ImageIcon, Video, Music, Coins, X, UploadCloud, CheckCircle2,
   FileText, Search, Trash2, Loader2, Sparkles, Grid
 } from "lucide-react";
 import { toast } from "sonner";
 import { StudioProject } from "@/types";
-import { getImageUrl } from "@/lib/utils";
 import { saveStudioProjectAction, deleteStudioProjectAction } from "@/lib/actions/studio";
 
 export type ContentType = 'canvas' | 'document' | 'image' | 'video' | 'audio';

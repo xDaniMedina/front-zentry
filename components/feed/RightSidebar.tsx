@@ -3,16 +3,15 @@
 import { useState, useEffect, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Bell, Users, Sparkles, Check, X, 
-  ExternalLink, Flame, Settings, Shield, Lock, Eye, Volume2, 
-  Moon, Sun, ChevronRight, CheckCircle2, UserCheck, KeyRound,
-  User, Palette, Save, CreditCard, SlidersHorizontal, LogOut,
-  MessageSquare, UserPlus, Circle, Loader2, Coins, Zap, ShieldCheck
+  Bell, Users, Check, X, Flame, Settings, Shield, 
+  Moon, Sun, CheckCircle2, KeyRound, Palette, SlidersHorizontal, LogOut,
+  MessageSquare, Loader2, Zap, ShieldCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import Link from "next/link";
+import Image from "next/image";
 import LogoutModal from "@/components/shared/LogoutModal";
 import { FriendUser } from "@/types";
 import { getImageUrl, getInitials } from "@/lib/utils";
@@ -21,8 +20,11 @@ import {
   getPendingFriendRequestsAction, 
   acceptFriendRequestAction, 
   rejectFriendRequestAction,
-  pingPresenceAction
+  pingPresenceAction,
+  getUserStatsAction,
+  UserSocialStats
 } from "@/lib/actions/friends";
+import useSWR from "swr";
 import { 
   getUserStreak, 
   checkInDailyStreak, 
@@ -53,6 +55,15 @@ export default function RightSidebar() {
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'notifications' | 'appearance' | 'account'>('privacy');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  // SWR para obtener estadísticas reales de la BD
+  const { data: swrRes } = useSWR(
+    user?.username ? 'userStatsRight' : null,
+    async () => await getUserStatsAction(),
+    { refreshInterval: 15000, fallbackData: { success: true, data: undefined as UserSocialStats | undefined } }
+  );
+  const stats = swrRes?.data || null;
+  const currentStreak = stats?.current_streak || 0;
 
   // Carga de Racha por usuario tras montaje
   useEffect(() => {
@@ -158,7 +169,7 @@ export default function RightSidebar() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <h3 suppressHydrationWarning className="font-black text-base text-white tracking-tight">
-                    {streak.currentStreak} {streak.currentStreak === 1 ? 'Día' : 'Días'} de Racha
+                    {currentStreak} {currentStreak === 1 ? 'Día' : 'Días'} de Racha
                   </h3>
                 </div>
                 <p suppressHydrationWarning className="text-[10px] text-orange-300/90 font-medium">
@@ -217,7 +228,7 @@ export default function RightSidebar() {
                 </>
               ) : (
                 <>
-                  <Flame className="w-4 h-4 fill-black" /> Encender Racha (+{50 + streak.currentStreak * 10} ZC)
+                  <Flame className="w-4 h-4 fill-black" /> Encender Racha (+{50 + currentStreak * 10} ZC)
                 </>
               )}
             </button>
@@ -256,7 +267,7 @@ export default function RightSidebar() {
                     <div className="flex items-center gap-3">
                       <div className="relative w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 font-extrabold text-xs flex items-center justify-center shrink-0 border border-purple-500/30 overflow-hidden">
                         {req.avatar_url ? (
-                          <img src={getImageUrl(req.avatar_url)} alt={req.name} className="w-full h-full object-cover" />
+                          <Image src={getImageUrl(req.avatar_url)} alt={req.name || "avatar"} fill sizes="40px" className="object-cover" />
                         ) : (
                           getInitials(req.name || req.username)
                         )}
@@ -329,7 +340,7 @@ export default function RightSidebar() {
                   <Link href={`/profile/${encodeURIComponent(friend.username)}`} className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="relative w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 font-black text-xs flex items-center justify-center shrink-0 border border-purple-500/30 overflow-hidden">
                       {friend.avatar_url ? (
-                        <img src={getImageUrl(friend.avatar_url)} alt={friend.name} className="w-full h-full object-cover" />
+                        <Image src={getImageUrl(friend.avatar_url)} alt={friend.name || "avatar"} fill sizes="40px" className="object-cover" />
                       ) : (
                         getInitials(friend.name || friend.username)
                       )}

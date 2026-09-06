@@ -1,57 +1,15 @@
 "use client"
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LayoutGrid, Plus, Folder, Clock, CheckCircle2, MoreVertical, 
-  Search, X, Calendar, Tag, AlertCircle, Users, Sparkles, Filter,
-  ArrowUpRight, BarChart3, CheckSquare, Layers, Flame, Trash2,
-  FolderKanban, Loader2
+import { Plus, CheckCircle2,
+  Search, X, Calendar, BarChart3, CheckSquare, Layers, Flame, Trash2,
+  FolderKanban
 } from "lucide-react";
 import { toast } from "sonner";
-import { Project, ProjectPriority, ProjectCategory } from "@/types";
+import { Project, ProjectPriority } from "@/types";
 import { createProjectAction, deleteProjectAction } from "@/lib/actions/projects";
-
-const DEFAULT_STARTER_PROJECTS: Project[] = [
-  { 
-    id: '1', 
-    title: 'Rediseño Zentry UI & Design System', 
-    description: 'Migración a Next.js 16 y Tailwind CSS, implementando micro-animaciones en Framer Motion y soporte responsivo completo.', 
-    category: 'UI/UX' as any,
-    priority: 'alta' as any,
-    progress: 75, 
-    status: 'active' as any, 
-    updatedAt: 'Hace 15 min',
-    deadline: '28 Feb 2026',
-    tasksCount: 8,
-    completedTasksCount: 6,
-    members: [
-      { id: 'u1', name: 'Daniel Medina', avatar: 'DM', role: 'Lead Dev', isOnline: true },
-      { id: 'u2', name: 'Luna Muse', avatar: 'LM', role: 'UI Designer', isOnline: true },
-      { id: 'u3', name: 'Pixel Kid', avatar: 'PK', role: 'Motion', isOnline: false }
-    ],
-    tags: ['Next.js', 'Tailwind', 'UI/UX']
-  },
-  { 
-    id: '2', 
-    title: 'Motor de Misiones y Recompensas Zentry Coins', 
-    description: 'Integración del microservicio de economía y logros gamificados con base de datos PostgreSQL.', 
-    category: 'Desarrollo' as any,
-    priority: 'urgente' as any,
-    progress: 45, 
-    status: 'active' as any, 
-    updatedAt: 'Hace 2 horas',
-    deadline: '05 Mar 2026',
-    tasksCount: 6,
-    completedTasksCount: 3,
-    members: [
-      { id: 'u1', name: 'Daniel Medina', avatar: 'DM', role: 'Backend Dev', isOnline: true },
-      { id: 'u4', name: 'Carlos Dev', avatar: 'CD', role: 'DB Admin', isOnline: true }
-    ],
-    tags: ['Spring Boot', 'Gamification', 'Postgres']
-  }
-];
 
 const PRIORITY_STYLES: Record<string, { label: string; color: string; border: string }> = {
   baja: { label: 'Baja', color: 'text-slate-400 bg-slate-500/10', border: 'border-slate-500/20' },
@@ -66,30 +24,7 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const formattedInitial: Project[] = (initialProjects && initialProjects.length > 0)
-    ? initialProjects
-    : DEFAULT_STARTER_PROJECTS;
-
-  const [projects, setProjects] = useState<Project[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('zentry_user_projects');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return formattedInitial;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && projects.length > 0) {
-      try {
-        localStorage.setItem('zentry_user_projects', JSON.stringify(projects));
-      } catch {}
-    }
-  }, [projects]);
+  const [projects, setProjects] = useState<Project[]>(initialProjects || []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'paused'>('all');
@@ -134,28 +69,7 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
       ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
       : [formData.category];
 
-    const tempId = Date.now().toString();
-    const newProj: Project = {
-      id: tempId,
-      title: formData.title,
-      description: formData.description || "Sin descripción.",
-      category: formData.category as any,
-      priority: formData.priority as any,
-      progress: 0,
-      status: 'active' as any,
-      updatedAt: 'Justo ahora',
-      deadline: formData.deadline || 'Sin fecha límite',
-      tasksCount: 0,
-      completedTasksCount: 0,
-      members: [
-        { id: 'me', name: 'Tú (Creador)', avatar: 'YO', role: 'Líder', isOnline: true }
-      ],
-      tags: tagsArray
-    };
-
-    setProjects([newProj, ...projects]);
     setIsCreateModalOpen(false);
-    toast.success("¡Proyecto creado con éxito!");
 
     startTransition(async () => {
       const res = await createProjectAction({
@@ -169,7 +83,10 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
       });
 
       if (res.success && res.data) {
-        setProjects(prev => prev.map(p => p.id === tempId ? res.data! : p));
+        setProjects(prev => [res.data!, ...prev]);
+        toast.success("¡Proyecto creado con éxito!");
+      } else {
+        toast.error(res.error || "No se pudo crear el proyecto");
       }
     });
 
@@ -185,11 +102,17 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
 
   const handleDeleteProject = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    const previous = projects;
     setProjects(prev => prev.filter(p => p.id !== id));
-    toast.success("Proyecto eliminado");
 
     startTransition(async () => {
-      await deleteProjectAction(id);
+      const res = await deleteProjectAction(id);
+      if (res.success) {
+        toast.success("Proyecto eliminado");
+      } else {
+        setProjects(previous);
+        toast.error("No se pudo eliminar el proyecto");
+      }
     });
   };
 

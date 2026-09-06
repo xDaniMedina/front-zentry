@@ -1,7 +1,6 @@
-﻿"use client"
+"use client"
 
 import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
 import { 
   X, Image as ImageIcon, Type, Music, Sparkles, Upload, 
   Check, Palette, Wand2, Eye, Loader2
@@ -11,6 +10,7 @@ import { StoryFontStyle, StoryItem } from "@/types/stories"
 import { useAuth } from "@/context/AuthContext"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 interface CreateStoryModalProps {
   isOpen: boolean;
@@ -195,9 +195,11 @@ export default function CreateStoryModal({
                   {textContent || "Escribe algo increíble para tu historia..."}
                 </p>
               ) : mediaUrl ? (
-                <img 
+                <Image 
                   src={mediaUrl} 
                   alt="Preview" 
+                  fill
+                  sizes="200px"
                   className="absolute inset-0 w-full h-full object-cover" 
                 />
               ) : (
@@ -377,7 +379,7 @@ export default function CreateStoryModal({
                           mediaUrl === item.url ? "border-zentry-accent scale-105" : "border-transparent hover:scale-102"
                         )}
                       >
-                        <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+                        <Image src={item.url} alt={item.name} fill sizes="100px" className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>

@@ -123,39 +123,35 @@ export interface Notification {
   link_url?: string
 }
 
+// Espeja MessageResponse del backend (zentry.back.api.realtime.dtos.MessageResponse)
 export interface Message {
-  id: string
-  sender_id?: string
-  sender_username?: string
-  receiver_id?: string
-  receiver_username?: string
-  text?: string
-  content?: string
-  isMe?: boolean
-  read?: boolean
-  status?: 'sending' | 'sent' | 'delivered' | 'read'
-  time?: string
-  created_at?: string
-  isImage?: boolean
-  fileUrl?: string
-  isVoice?: boolean
-  voiceDuration?: string
-  reactions?: Record<string, string[]>
+  id: number
+  conversationId: number
+  senderId: number
+  content: string
+  type?: string | null
+  createdAt: string
+  /** Solo cliente: true mientras el POST todavía no confirma (nunca viene del backend) */
+  pending?: boolean
 }
 
+// Espeja ConversationSummaryResponse (bandeja) + datos resueltos en cliente
+// (nombre/avatar del otro participante, que el backend no calcula)
 export interface Conversation {
-  id: string | number
-  name: string
-  username: string
-  avatar: string
-  bio?: string
+  id: number
+  isGroup: boolean
+  name: string | null
+  otherUserId: number | null
+  lastMessageContent: string | null
+  lastMessageSenderId: number | null
+  lastMessageAt: string | null
+  unreadCount: number
+  // Resueltos en el cliente a partir de la lista de amigos/perfil (no vienen del backend)
+  displayName: string
+  displayAvatarUrl?: string | null
   isOnline?: boolean
-  lastSeen?: string
-  participant_ids?: string[]
-  last_message?: Message | null
+  // Mensajes de la conversación activa, cargados on-demand
   messages?: Message[]
-  unread_count?: number
-  created_at?: string
 }
 
 export interface Transaction {
@@ -254,7 +250,7 @@ export interface StudioProject {
   reward?: number
   content?: string
   thumbnail_url?: string | null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   metadata?: Record<string, any>
   created_at?: string
 }

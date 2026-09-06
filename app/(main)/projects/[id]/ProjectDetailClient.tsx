@@ -4,20 +4,21 @@ import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ArrowLeft, Plus, CheckCircle2, Circle, Clock, Files, History, 
-  Users, UploadCloud, MessageSquare, Trash2, Check, ExternalLink,
-  Tag, Calendar, Sparkles, AlertCircle, Share2, MoreVertical, FileText,
-  Download, Send, Eye, ShieldCheck, Flame, Layers, Heart, UserPlus,
+  ArrowLeft, Plus, CheckCircle2, Files, History, 
+  Users, UploadCloud, MessageSquare, Trash2, Check, Share2,
+  Download, Send, Heart, UserPlus,
   Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-import { 
-  addProjectTaskAction, 
-  toggleProjectTaskAction, 
-  addProjectCommentAction, 
-  toggleProjectLikeAction, 
-  joinProjectAction, 
-  updateProjectAction 
+import {
+  addProjectTaskAction,
+  toggleProjectTaskAction,
+  deleteTaskAction,
+  addResourceAction,
+  addProjectCommentAction,
+  toggleProjectLikeAction,
+  inviteProjectMemberAction,
+  removeProjectMemberAction,
 } from "@/lib/actions/projects";
 import { Project, ProjectTask, ProjectPriority } from "@/types";
 
@@ -71,74 +72,46 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
   const [isLiked, setIsLiked] = useState(initialProject?.isLiked || false);
 
   // Estado de Tareas
-  const [tasks, setTasks] = useState<ProjectTask[]>(
-    initialProject?.tasks && initialProject.tasks.length > 0 
-      ? initialProject.tasks 
-      : [
-          { id: 't1', title: 'Diseñar la paleta semántica zentry-* y componentes base', completed: true, priority: 'alta', assignedTo: 'Luna Muse', dueDate: '18 Feb' },
-          { id: 't2', title: 'Implementar modal portal de cierre de sesión e hidratación', completed: true, priority: 'alta', assignedTo: 'Daniel Medina', dueDate: '20 Feb' },
-          { id: 't3', title: 'Refactorizar cuadrícula y layout responsivo del feed', completed: true, priority: 'media', assignedTo: 'Daniel Medina', dueDate: '21 Feb' },
-          { id: 't4', title: 'Conectar endpoints Spring Boot para actualización de proyectos', completed: false, priority: 'alta', assignedTo: 'Carlos Dev', dueDate: '25 Feb' },
-          { id: 't5', title: 'Diseñar assets e ilustraciones 3D para el Estudio', completed: false, priority: 'media', assignedTo: 'Luna Muse', dueDate: '28 Feb' },
-          { id: 't6', title: 'Pruebas de rendimiento y Core Web Vitals en producción', completed: false, priority: 'baja', assignedTo: 'Daniel Medina', dueDate: '02 Mar' }
-        ]
-  );
+  const [tasks, setTasks] = useState<ProjectTask[]>(initialProject?.tasks || []);
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<ProjectPriority>('media');
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
-  // Estado de Recursos / Archivos
-  const [resources, setResources] = useState<ProjectResource[]>([
-    { id: 'r1', name: 'Zentry_UI_Design_System_v2.fig', type: 'FIGMA', size: '24.5 MB', uploadedBy: 'Luna Muse', date: 'Hace 2 días' },
-    { id: 'r2', name: 'Arquitectura_API_Spring_Boot.pdf', type: 'PDF', size: '3.8 MB', uploadedBy: 'Carlos Dev', date: 'Ayer' },
-    { id: 'r3', name: 'Iconos_SVG_Optimizados.zip', type: 'ZIP', size: '1.2 MB', uploadedBy: 'Pixel Kid', date: 'Hace 4 horas' }
-  ]);
+  // Estado de Recursos / Archivos (metadatos reales del backend; sin almacenamiento de archivo aún)
+  const [resources, setResources] = useState<ProjectResource[]>(
+    (initialProject as unknown as { resources?: ProjectResource[] })?.resources || []
+  );
 
   // Estado de Colaboradores
   const [collaborators, setCollaborators] = useState<ProjectCollaborator[]>(
-    initialProject?.members && initialProject.members.length > 0
-      ? initialProject.members.map(m => ({
-          id: m.id,
-          name: m.name,
-          avatar: m.avatar,
-          role: m.role,
-          isOnline: m.isOnline,
-          tasksCompleted: 1
-        }))
-      : [
-          { id: 'u1', name: 'Daniel Medina', avatar: 'DM', role: 'Líder / Frontend', isOnline: true, tasksCompleted: 3 },
-          { id: 'u2', name: 'Luna Muse', avatar: 'LM', role: 'Diseñadora UI/UX', isOnline: true, tasksCompleted: 2 },
-          { id: 'u3', name: 'Carlos Dev', avatar: 'CD', role: 'Backend Spring Boot', isOnline: false, tasksCompleted: 1 },
-          { id: 'u4', name: 'Pixel Kid', avatar: 'PK', role: 'Motion Designer', isOnline: true, tasksCompleted: 1 },
-        ]
+    (initialProject?.members || []).map(m => ({
+      id: m.id,
+      name: m.name,
+      avatar: m.avatar,
+      role: m.role,
+      isOnline: m.isOnline,
+      tasksCompleted: 0,
+    }))
   );
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteUsername, setInviteUsername] = useState("");
 
-  // Estado de Historial de Actividad
-  const [activities, setActivities] = useState<ProjectActivity[]>([
-    { id: 'a1', user: 'Daniel Medina', avatar: 'DM', action: 'completó la tarea', target: 'Refactorizar cuadrícula y layout responsivo del feed', time: 'Hace 10 minutos', iconType: 'task' },
-    { id: 'a2', user: 'Luna Muse', avatar: 'LM', action: 'subió el recurso', target: 'Zentry_UI_Design_System_v2.fig', time: 'Hace 2 horas', iconType: 'file' },
-    { id: 'a3', user: 'Carlos Dev', avatar: 'CD', action: 'actualizó el estado a', target: 'En Progreso Activo', time: 'Ayer', iconType: 'status' },
-    { id: 'a4', user: 'Daniel Medina', avatar: 'DM', action: 'creó el proyecto', target: projectTitle, time: 'Hace 3 días', iconType: 'member' }
-  ]);
+  // Estado de Historial de Actividad (real, generado por el backend en cada acción)
+  const [activities, setActivities] = useState<ProjectActivity[]>(
+    (initialProject as unknown as { activities?: ProjectActivity[] })?.activities || []
+  );
 
   // Estado de Notas Rápidas & Discusión
   const [notes, setNotes] = useState<Array<{ id: string; user: string; text: string; time: string }>>(
-    initialProject?.comments && initialProject.comments.length > 0
-      ? initialProject.comments.map(c => ({
-          id: c.id,
-          user: c.authorName || `@${c.authorUsername}`,
-          text: c.content,
-          time: c.createdAt
-        }))
-      : [
-          { id: 'n1', user: 'Luna Muse', text: 'He dejado listos los componentes del modal en Figma. Revisar paleta de colores oscuros.', time: 'Ayer 18:30' },
-          { id: 'n2', user: 'Daniel Medina', text: '¡Excelente! Ya quedaron montados con React Portal para evitar solapamientos.', time: 'Hoy 04:15' }
-        ]
+    (initialProject?.comments || []).map(c => ({
+      id: c.id,
+      user: c.authorName || `@${c.authorUsername}`,
+      text: c.content,
+      time: c.createdAt
+    }))
   );
   const [newNoteText, setNewNoteText] = useState("");
 
@@ -149,20 +122,34 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
 
   // Reacción Social (Like)
   const handleToggleLike = () => {
+    const previousLiked = isLiked;
+    const previousCount = likesCount;
     const nextLiked = !isLiked;
     setIsLiked(nextLiked);
     setLikesCount(prev => nextLiked ? prev + 1 : Math.max(0, prev - 1));
 
     startTransition(async () => {
-      await toggleProjectLikeAction(projectId);
+      const res = await toggleProjectLikeAction(projectId);
+      if (res.success) {
+        if (res.isLiked !== undefined) setIsLiked(res.isLiked);
+        if (res.likesCount !== undefined) setLikesCount(res.likesCount);
+      } else {
+        setIsLiked(previousLiked);
+        setLikesCount(previousCount);
+      }
     });
   };
 
-  // Postularse / Unirse
-  const handleJoinProject = () => {
-    toast.success("¡Solicitud para colaborar enviada al líder del proyecto! 🚀");
+  const handleRemoveMember = (username: string) => {
+    const previous = collaborators;
+    setCollaborators(prev => prev.filter(c => c.id !== username));
+
     startTransition(async () => {
-      await joinProjectAction(projectId);
+      const res = await removeProjectMemberAction(projectId, username);
+      if (!res.success) {
+        setCollaborators(previous);
+        toast.error(res.error || "No se pudo quitar al colaborador");
+      }
     });
   };
 
@@ -240,41 +227,45 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
 
   const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const previous = tasks;
     setTasks(prev => prev.filter(t => t.id !== taskId));
-    toast.info("Tarea eliminada.");
+
+    startTransition(async () => {
+      const res = await deleteTaskAction(projectId, taskId);
+      if (res.success) {
+        toast.info("Tarea eliminada.");
+      } else {
+        setTasks(previous);
+        toast.error("No se pudo eliminar la tarea");
+      }
+    });
   };
 
-  // Subida de Archivos
+  // Subida de Archivos (solo metadatos: el backend aún no almacena el archivo en sí)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    if (!file) return;
 
-      const newRes: ProjectResource = {
-        id: Date.now().toString(),
-        name: file.name,
-        type: ext,
-        size: sizeMB,
-        uploadedBy: 'Tú',
-        date: 'Justo ahora'
-      };
+    const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
 
-      setResources([newRes, ...resources]);
-      setActivities(act => [
-        {
-          id: Date.now().toString(),
-          user: 'Tú',
-          avatar: 'YO',
-          action: 'subió el recurso',
-          target: file.name,
-          time: 'Justo ahora',
-          iconType: 'file'
-        },
-        ...act
-      ]);
-      toast.success(`Archivo "${file.name}" cargado exitosamente 📁`);
-    }
+    startTransition(async () => {
+      const res = await addResourceAction(projectId, { name: file.name, type: ext, size: sizeMB });
+      if (res.success && res.data) {
+        setResources(prev => [{
+          id: String(res.data.id),
+          name: res.data.name,
+          type: res.data.type,
+          size: res.data.size,
+          uploadedBy: res.data.uploadedBy,
+          date: res.data.uploadedAt,
+          url: res.data.url,
+        }, ...prev]);
+        toast.success(`Archivo "${file.name}" registrado en el proyecto 📁`);
+      } else {
+        toast.error("No se pudo registrar el archivo");
+      }
+    });
   };
 
   // Invitar Colaborador
@@ -283,32 +274,26 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
     if (!inviteUsername.trim()) return;
 
     const clean = inviteUsername.replace('@', '');
-    const newCollab: ProjectCollaborator = {
-      id: Date.now().toString(),
-      name: clean,
-      avatar: clean.substring(0, 2).toUpperCase(),
-      role: 'Colaborador',
-      isOnline: true,
-      tasksCompleted: 0
-    };
 
-    setCollaborators([...collaborators, newCollab]);
-    setActivities(act => [
-      {
-        id: Date.now().toString(),
-        user: 'Tú',
-        avatar: 'YO',
-        action: 'invitó a',
-        target: `@${clean}`,
-        time: 'Justo ahora',
-        iconType: 'member'
-      },
-      ...act
-    ]);
+    startTransition(async () => {
+      const res = await inviteProjectMemberAction(projectId, clean);
+      if (res.success && res.data) {
+        setCollaborators(prev => [...prev, {
+          id: res.data!.id,
+          name: res.data!.name,
+          avatar: res.data!.avatar,
+          role: res.data!.role,
+          isOnline: false,
+          tasksCompleted: 0,
+        }]);
+        toast.success(`¡Invitación enviada a @${clean}! 🚀`);
+      } else {
+        toast.error(res.error || "No se pudo invitar a este usuario");
+      }
+    });
 
     setInviteUsername("");
     setIsInviteModalOpen(false);
-    toast.success(`¡Invitación enviada a @${clean}! 🚀`);
   };
 
   // Enviar Nota / Comentario
@@ -366,13 +351,13 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
           </button>
 
           <button
-            onClick={handleJoinProject}
+            onClick={() => setIsInviteModalOpen(true)}
             className="px-4 py-2 rounded-2xl bg-zentry-accent text-white text-xs font-black hover:opacity-90 shadow-md flex items-center gap-1.5 transition-all"
           >
-            <UserPlus className="w-4 h-4" /> Unirme al Equipo
+            <UserPlus className="w-4 h-4" /> Invitar Colaborador
           </button>
 
-          <button 
+          <button
             onClick={() => {
               if (typeof window !== 'undefined') {
                 navigator.clipboard.writeText(window.location.href);
@@ -708,8 +693,19 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
                   </div>
                 </div>
 
-                <div className="text-right text-[11px] text-zentry-text-2 font-mono">
-                  <span className="font-bold text-zentry-text-1">{collab.tasksCompleted}</span> tareas
+                <div className="flex items-center gap-3">
+                  <div className="text-right text-[11px] text-zentry-text-2 font-mono">
+                    <span className="font-bold text-zentry-text-1">{tasks.filter(t => t.assignedTo === collab.name && t.completed).length}</span> tareas
+                  </div>
+                  {collab.role !== 'Líder de Proyecto' && (
+                    <button
+                      onClick={() => handleRemoveMember(collab.id)}
+                      className="p-1.5 text-zentry-text-2 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
+                      title="Quitar colaborador"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

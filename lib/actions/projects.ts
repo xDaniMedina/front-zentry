@@ -1,14 +1,11 @@
 'use server'
 
-import { fetchAPI } from '@/lib/api'
+import { fetchAPI, ApiError } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
 import { Project, ProjectTask, ProjectComment, ProjectMember, ProjectCategory, ProjectPriority } from '@/types'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapBackendToProject(p: any): Project {
-  if (!p) return {} as Project;
-
-  const id = String(p.id || Math.random().toString(36).substr(2, 9));
+  const id = String(p.id);
   const title = p.title || `Proyecto #${id}`;
   const description = p.description || 'Sin descripción proporcionada.';
   const category = p.category || 'UI/UX';
@@ -16,9 +13,9 @@ function mapBackendToProject(p: any): Project {
   const status = p.status === 'completed' ? 'completed' : p.status === 'paused' ? 'paused' : 'active';
 
   const rawTasks = Array.isArray(p.tasks) ? p.tasks : [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tasks: ProjectTask[] = rawTasks.map((t: any, idx: number) => ({
-    id: String(t.id || `t-${idx}`),
+
+  const tasks: ProjectTask[] = rawTasks.map((t: any) => ({
+    id: String(t.id),
     title: t.title || 'Tarea',
     completed: Boolean(t.completed),
     priority: t.priority || 'media',
@@ -30,14 +27,36 @@ function mapBackendToProject(p: any): Project {
   const tasksCount = tasks.length;
   const progress = tasksCount > 0 ? Math.round((completedTasksCount / tasksCount) * 100) : 0;
 
-  const creatorName = p.createdBy || 'Creador Zentry';
-  const creatorAvatar = creatorName.length >= 2 ? creatorName.substring(0, 2).toUpperCase() : 'ZN';
-
-  const members: ProjectMember[] = [
-    { id: 'u1', name: creatorName, avatar: creatorAvatar, role: 'Líder de Proyecto', isOnline: true }
-  ];
-
   const tags = p.tags ? (typeof p.tags === 'string' ? p.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : p.tags) : [category];
+
+  const comments: ProjectComment[] = Array.isArray(p.notes) ? p.notes.map((n: any) => ({
+    id: String(n.id),
+    authorName: n.author || 'Usuario',
+    authorUsername: n.author || 'usuario',
+    authorAvatar: (n.author || 'ZN').substring(0, 2).toUpperCase(),
+    content: n.content,
+    createdAt: n.createdAt,
+  })) : [];
+
+  const resources = Array.isArray(p.resources) ? p.resources.map((r: any) => ({
+    id: String(r.id),
+    name: r.name,
+    type: r.type,
+    size: r.size,
+    uploadedBy: r.uploadedBy,
+    date: r.uploadedAt,
+    url: r.url,
+  })) : [];
+
+  const activities = Array.isArray(p.activities) ? p.activities.map((a: any) => ({
+    id: String(a.id),
+    user: a.user,
+    avatar: a.avatar,
+    action: a.action,
+    target: a.target,
+    time: a.timestamp,
+    iconType: a.iconType,
+  })) : [];
 
   return {
     id,
@@ -53,13 +72,28 @@ function mapBackendToProject(p: any): Project {
     deadline: p.deadline || 'Sin fecha límite',
     tasksCount,
     completedTasksCount,
-    members,
+    members: [],
     tags,
     tasks,
-    activities: p.activities || [],
-    resources: p.resources || [],
-    notes: p.notes || []
+    comments,
+    resources,
+    activities,
+    likesCount: 0,
+    isLiked: false,
+    authorUsername: p.createdBy,
+    authorName: p.createdBy,
   } as unknown as Project;
+}
+
+function mapBackendMember(m: { projectId: number; username: string; role: string; joinedAt: string }): ProjectMember {
+  return {
+    id: m.username,
+    name: m.username,
+    username: m.username,
+    avatar: m.username.substring(0, 2).toUpperCase(),
+    role: m.role === 'OWNER' ? 'Líder de Proyecto' : 'Colaborador',
+    isOnline: false,
+  };
 }
 
 export async function getProjectsAction(): Promise<{ success: boolean; data?: Project[]; error?: string }> {
@@ -78,14 +112,63 @@ export async function getProjectsAction(): Promise<{ success: boolean; data?: Pr
 
 export async function getProjectByIdAction(id: string | number): Promise<{ success: boolean; data?: Project; error?: string }> {
   try {
-    const res = await fetchAPI(`/api/core/projects/${id}`)
+    const [res, membersRes, likeRes] = await Promise.all([
+      fetchAPI(`/api/core/projects/${id}`),
+      fetchAPI(`/api/core/projects/${id}/members`),
+      fetchAPI(`/api/core/projects/${id}/like`),
+    ])
     if (!res) {
       return { success: false, error: 'Proyecto no encontrado' }
     }
-    return { success: true, data: mapBackendToProject(res) }
+    const project = mapBackendToProject(res)
+    project.members = Array.isArray(membersRes) ? membersRes.map(mapBackendMember) : []
+    project.likesCount = likeRes?.likesCount ?? 0
+    project.isLiked = Boolean(likeRes?.liked)
+    return { success: true, data: project }
   } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Error al cargar proyecto'
     console.error(`Error al obtener proyecto ${id}:`, error)
-    return { success: false, error: 'Error al cargar proyecto' }
+    return { success: false, error: message }
+  }
+}
+
+export async function getProjectMembersAction(id: string | number): Promise<{ success: boolean; data: ProjectMember[] }> {
+  try {
+    const res = await fetchAPI(`/api/core/projects/${id}/members`)
+    return { success: true, data: Array.isArray(res) ? res.map(mapBackendMember) : [] }
+  } catch (error) {
+    console.error(`Error al obtener colaboradores del proyecto ${id}:`, error)
+    return { success: false, data: [] }
+  }
+}
+
+export async function inviteProjectMemberAction(id: string | number, username: string): Promise<{ success: boolean; data?: ProjectMember; error?: string }> {
+  try {
+    const res = await fetchAPI(`/api/core/projects/${id}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    })
+    if (!res) {
+      return { success: false, error: 'No se pudo invitar al colaborador' }
+    }
+    revalidatePath(`/projects/${id}`)
+    return { success: true, data: mapBackendMember(res) }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo invitar al colaborador'
+    console.error(`Error al invitar colaborador al proyecto ${id}:`, error)
+    return { success: false, error: message }
+  }
+}
+
+export async function removeProjectMemberAction(id: string | number, username: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await fetchAPI(`/api/core/projects/${id}/members/${encodeURIComponent(username)}`, { method: 'DELETE' })
+    revalidatePath(`/projects/${id}`)
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo quitar al colaborador'
+    console.error(`Error al quitar colaborador del proyecto ${id}:`, error)
+    return { success: false, error: message }
   }
 }
 
@@ -234,7 +317,7 @@ export async function deleteTaskAction(
 export async function addResourceAction(
   projectId: string | number,
   payload: { name: string; type: string; size: string; url?: string }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
 ): Promise<{ success: boolean; data?: any }> {
   try {
     const res = await fetchAPI(`/api/core/projects/${projectId}/resources`, {
@@ -253,7 +336,7 @@ export async function addResourceAction(
 export async function addNoteAction(
   projectId: string | number,
   content: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
 ): Promise<{ success: boolean; data?: any }> {
   try {
     const res = await fetchAPI(`/api/core/projects/${projectId}/notes`, {
@@ -272,30 +355,34 @@ export async function addNoteAction(
 export async function addProjectCommentAction(
   projectId: string | number,
   content: string
-): Promise<{ success: boolean; data?: ProjectComment }> {
-  try {
-    const res = await addNoteAction(projectId, content);
-    return {
-      success: res.success,
-      data: res.data ? {
-        id: String(res.data.id || Date.now()),
-        authorName: res.data.author || 'Usuario',
-        authorUsername: res.data.author || 'usuario',
-        authorAvatar: 'ZN',
-        content,
-        createdAt: 'Justo ahora'
-      } : undefined
+): Promise<{ success: boolean; data?: ProjectComment; error?: string }> {
+  const res = await addNoteAction(projectId, content);
+  if (!res.success || !res.data) {
+    return { success: false, error: 'No se pudo agregar la nota' }
+  }
+  return {
+    success: true,
+    data: {
+      id: String(res.data.id),
+      authorName: res.data.author || 'Usuario',
+      authorUsername: res.data.author || 'usuario',
+      authorAvatar: (res.data.author || 'ZN').substring(0, 2).toUpperCase(),
+      content: res.data.content,
+      createdAt: res.data.createdAt,
     }
-  } catch (error) {
-    return { success: false }
   }
 }
 
-export async function toggleProjectLikeAction(_projectId: string | number): Promise<{ success: boolean; isLiked?: boolean }> {
-  return { success: true, isLiked: true }
-}
-
-export async function joinProjectAction(_projectId: string | number): Promise<{ success: boolean }> {
-  return { success: true }
+export async function toggleProjectLikeAction(projectId: string | number): Promise<{ success: boolean; isLiked?: boolean; likesCount?: number }> {
+  try {
+    const res = await fetchAPI(`/api/core/projects/${projectId}/like`, { method: 'POST' })
+    if (!res) {
+      return { success: false }
+    }
+    return { success: true, isLiked: res.liked, likesCount: res.likesCount }
+  } catch (error) {
+    console.error(`Error al dar me gusta al proyecto ${projectId}:`, error)
+    return { success: false }
+  }
 }
 

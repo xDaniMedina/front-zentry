@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import {
-  Home, Wand2, Compass, LayoutGrid, Bell, Shield, Key,
-  MessageSquare, Users, LogOut, Settings, Wallet, Flame, ArrowUpRight, ShoppingBag
+  Home, Wand2, Compass, LayoutGrid,
+  MessageSquare, Users, LogOut, Wallet, Flame, ArrowUpRight, ShoppingBag
 } from 'lucide-react'
 import { useTheme } from '@/components/providers/ThemeProvider'
 import { useState, useEffect } from 'react'
@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext'
 import MissionsModal from './MissionsModal'
 import LogoutModal from '@/components/shared/LogoutModal'
 import { getUserStatsAction, UserSocialStats } from '@/lib/actions/friends'
+import useSWR from 'swr'
 
 const NAV_ITEMS = [
   { href: '/feed',        icon: Home,          label: 'Feed' },
@@ -30,8 +31,6 @@ export default function LeftSidebar() {
   const [mounted, setMounted] = useState(false)
   const [isMissionsOpen, setIsMissionsOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
-  const [stats, setStats] = useState<UserSocialStats | null>(null)
-
   const rawUsername = user?.username || user?.email || 'creador';
   const displayUsername = user?.username?.includes('@') 
       ? user.username.split('@')[0] 
@@ -40,23 +39,13 @@ export default function LeftSidebar() {
   const initials = displayUsername.slice(0, 2).toUpperCase();
   const discipline = user?.discipline || "Creador Digital"
 
-  // Carga periódica de estadísticas reales (obras, seguidores, seguidos, monedas)
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await getUserStatsAction();
-        if (res.success && res.data) {
-          setStats(res.data);
-        }
-      } catch (e) {
-        console.warn("Error cargando stats:", e);
-      }
-    };
-
-    fetchStats();
-    const interval = setInterval(fetchStats, 15000);
-    return () => clearInterval(interval);
-  }, [user?.username]);
+  const { data: swrRes } = useSWR(
+    user?.username ? 'userStats' : null,
+    async () => await getUserStatsAction(),
+    { refreshInterval: 15000, fallbackData: { success: true, data: undefined as UserSocialStats | undefined } }
+  )
+  
+  const stats = swrRes?.data || null;
 
   const posts = stats?.posts_count ?? user?.postsCount ?? 0;
   const followers = stats?.followers_count ?? user?.followersCount ?? 0;
@@ -111,7 +100,7 @@ export default function LeftSidebar() {
         </Link>
           
         {/* ESTADÍSTICAS DINÁMICAS (Obras, Seguidores, Seguidos / Monedas) */}
-        <div className="hidden lg:grid grid-cols-3 gap-1 text-center border-t border-zentry-border pt-2.5">
+        <div className="hidden lg:grid grid-cols-4 gap-1 text-center border-t border-zentry-border pt-2.5">
           <Link href="/studio" className="hover:opacity-80 transition-opacity">
             <p className="text-xs font-extrabold text-zentry-text-1">{posts}</p>
             <p className="text-[10px] text-zentry-text-2">obras</p>
@@ -121,9 +110,15 @@ export default function LeftSidebar() {
             <p className="text-[10px] text-zentry-text-2">segs</p>
           </Link>
           <Link href="/wallet" className="hover:opacity-80 transition-opacity">
-            <p className="text-sm font-extrabold text-amber-400">{coins}</p>
-            <p className="text-[11px] text-zentry-text-2">coins</p>
+            <p className="text-xs font-extrabold text-amber-400">{coins}</p>
+            <p className="text-[10px] text-zentry-text-2">coins</p>
           </Link>
+          <div className="hover:opacity-80 transition-opacity cursor-default flex flex-col items-center justify-center">
+            <p className="text-xs font-extrabold text-orange-400 flex items-center gap-0.5 justify-center">
+              <Flame className="w-3 h-3 text-orange-500" /> {stats?.current_streak || 0}
+            </p>
+            <p className="text-[10px] text-zentry-text-2">racha</p>
+          </div>
         </div>
 
         {/* 1. TARJETA DE BILLETERA (DINÁMICA) */}

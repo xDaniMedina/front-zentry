@@ -1,10 +1,10 @@
 "use client"
 
 import { useRef } from "react"
-import { motion } from "framer-motion"
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import { getInitials, getImageUrl, cn } from "@/lib/utils"
 import { UserStoryGroup } from "@/types/stories"
+import Image from "next/image"
 
 interface StoriesProps {
   stories: UserStoryGroup[];
@@ -77,11 +77,12 @@ export function Stories({
                 <div className="w-full h-full bg-zentry-bg rounded-full p-[2px]">
                   <div className="w-full h-full bg-zentry-card rounded-full flex items-center justify-center text-xs sm:text-sm font-black text-zentry-text-1 relative overflow-hidden">
                     {story.avatar_url ? (
-                      <img 
+                      <Image 
                         src={getImageUrl(story.avatar_url)} 
                         alt={story.name || story.username} 
-                        className="w-full h-full object-cover rounded-full" 
-                        loading="lazy"
+                        fill 
+                        sizes="40px"
+                        className="object-cover rounded-full" 
                       />
                     ) : (
                       <span>{story.avatar || getInitials(story.name || story.username)}</span>

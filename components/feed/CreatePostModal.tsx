@@ -1,24 +1,23 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { 
   Image as ImageIcon, Video, Music, FileText, X, Sparkles, 
-  Upload, Send, Loader2, Link as LinkIcon, Check, Eye
+  Upload, Send, Loader2
 } from "lucide-react"
 import { toast } from "sonner"
-import { useAuth } from "@/context/AuthContext"
-import { getInitials, getImageUrl } from "@/lib/utils"
-import { FeedPost } from "@/app/api/posts/route"
+import { createPostAction } from "@/lib/actions/feed"
+import { PostType } from "@/components/feed/FeedCard"
+import Image from "next/image"
 
 interface CreatePostModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPostCreated: (post: FeedPost) => void;
+  onPostCreated: (post: PostType) => void;
 }
 
 export default function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostModalProps) {
-  const { user } = useAuth();
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'audio' | 'text'>('image');
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -28,9 +27,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
   const [previewData, setPreviewData] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const cleanUsername = (user?.username || user?.email || 'creador').replace(/^@/, '').toLowerCase();
-  const authorName = user?.name || user?.username || 'Creador Zentry';
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -59,40 +55,24 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         .filter(t => t.length > 0)
         .map(t => t.startsWith('#') ? t : `#${t}`);
 
-      const payload = {
+      const res = await createPostAction({
         title: title.trim(),
         description: description.trim(),
-        author: authorName,
-        handle: `@${cleanUsername}`,
-        avatar: getInitials(authorName),
-        avatar_url: user?.avatar_url || undefined,
-        discipline: user?.discipline || 'Artista Digital',
-        media_type: mediaType,
-        media_url: previewData || mediaUrl || undefined,
+        contentType: mediaType,
+        mediaUrl: previewData || mediaUrl || undefined,
         tags: tags.length > 0 ? tags : ['#Zentry', '#Creatividad']
-      };
-
-      const res = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          onPostCreated(data.data);
-          toast.success("🎉 ¡Tu obra ha sido publicada en el Feed!");
-          setTitle("");
-          setDescription("");
-          setMediaUrl("");
-          setPreviewData(null);
-          onClose();
-        } else {
-          toast.error(data.error || "Error al publicar");
-        }
+      if (res.success && res.data) {
+        onPostCreated(res.data);
+        toast.success("🎉 ¡Tu obra ha sido publicada en el Feed!");
+        setTitle("");
+        setDescription("");
+        setMediaUrl("");
+        setPreviewData(null);
+        onClose();
       } else {
-        toast.error("Error en el servidor");
+        toast.error(res.error || "Error al publicar");
       }
     } catch (err) {
       toast.error("Error al publicar la obra");
@@ -225,7 +205,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                 <div className="p-3 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 overflow-hidden">
                     {mediaType === 'image' && (
-                      <img src={previewData} alt="Preview" className="w-12 h-12 rounded-xl object-cover border border-zentry-border shrink-0" />
+                      <Image src={previewData} alt="Preview" width={48} height={48} className="w-12 h-12 rounded-xl object-cover border border-zentry-border shrink-0" />
                     )}
                     {mediaType === 'video' && (
                       <video src={previewData} className="w-12 h-12 rounded-xl object-cover border border-zentry-border shrink-0" />

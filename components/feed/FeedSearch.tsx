@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Loader2, X, TrendingUp, Sparkles, Hash } from "lucide-react"
+import { Search, Loader2, X, TrendingUp, Hash } from "lucide-react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import { searchProfilesAction } from "@/lib/actions/profile"

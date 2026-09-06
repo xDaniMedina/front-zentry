@@ -38,7 +38,7 @@ export async function sendFriendRequestAction(
   message?: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const body: Record<string, any> = { message: message || '' }
     if (typeof targetUserIdOrUsername === 'number' || !isNaN(Number(targetUserIdOrUsername))) {
       body.target_user_id = Number(targetUserIdOrUsername)
@@ -124,6 +124,7 @@ export interface UserSocialStats {
   zentry_coins: number;
   coins_today: number;
   reputation_score: number;
+  current_streak?: number;
 }
 
 export async function getUserStatsAction(): Promise<{ success: boolean; data?: UserSocialStats; error?: string }> {
@@ -138,3 +139,24 @@ export async function getUserStatsAction(): Promise<{ success: boolean; data?: U
     return { success: false, error: 'Error al conectar con el servidor' }
   }
 }
+
+export async function getFollowersAction(username: string) {
+  try {
+    const res = await fetchAPI(`/api/core/follows/followers/${username}`);
+    return { success: true, data: res }; // Asumiendo que res es un array de perfiles
+  } catch (error: any) {
+    console.error("Error fetching followers:", error);
+    return { success: false, data: [] };
+  }
+}
+
+export async function getFollowingAction(username: string) {
+  try {
+    const res = await fetchAPI(`/api/core/follows/following/${username}`);
+    return { success: true, data: res };
+  } catch (error: any) {
+    console.error("Error fetching following:", error);
+    return { success: false, data: [] };
+  }
+}
+

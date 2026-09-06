@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lint debug dumps (not build artifacts, just local eslint output)
+lint_output*.txt
+lint_utf8.txt

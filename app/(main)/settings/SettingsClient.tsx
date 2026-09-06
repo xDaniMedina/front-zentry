@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import {
-  Settings, User, Shield, Bell, Palette, CreditCard,
-  Lock, Eye, KeyRound, Save, Check, Globe, Smartphone,
-  Volume2, ShieldCheck, Moon, Sun, Sparkles
+  Settings, User, Shield, Bell, Palette, CreditCard, KeyRound, Save, Moon, Sun
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";

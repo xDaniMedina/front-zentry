@@ -1,7 +1,8 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { motion, Variants, AnimatePresence } from "framer-motion"
+import Image from "next/image"
 import { Stories } from "@/components/feed/Stories"
 import StoryViewer from "@/components/feed/StoryViewer"
 import CreateStoryModal from "@/components/feed/CreateStoryModal"
@@ -12,12 +13,13 @@ import { FeedCard, PostType } from "@/components/feed/FeedCard"
 import CreatePostModal from "@/components/feed/CreatePostModal"
 import { 
   X, Send, Sparkles, Image as ImageIcon, Video, Music, 
-  FileText, MessageSquare, Loader2, Heart, Share2, PlusCircle
+  FileText, MessageSquare, Loader2
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
-import { getImageUrl, getInitials } from "@/lib/utils"
+import { getImageUrl, getInitials, timeAgo } from "@/lib/utils"
 import { getFriendsAction } from "@/lib/actions/friends"
+import { getFeedPosts, toggleLikePostAction, getPostCommentsAction, addPostCommentAction } from "@/lib/actions/feed"
 import { FriendUser, UserStoryGroup, StoryItem } from "@/types"
 import { INITIAL_STORIES_DATA, getLocalUserStories, markStoryGroupViewed, getViewedStoryIds } from "@/lib/stories"
 
@@ -51,18 +53,14 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  // 1. Cargar Posts Dinámicos desde Servidor Next.js y Backend
+  // 1. Cargar Posts Reales desde el Backend
   const loadPosts = async () => {
-    try {
-      const res = await fetch('/api/posts');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-          setPosts(data.data);
-          return;
-        }
-      }
-    } catch (err) {}
+    const res = await getFeedPosts();
+    if (res.success && res.data) {
+      setPosts(res.data);
+      setLikedPosts(res.data.filter(p => p.liked).map(p => p.id));
+      return;
+    }
 
     if (initialPosts && Array.isArray(initialPosts)) {
       setPosts(initialPosts);
@@ -229,11 +227,11 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
     });
   };
 
-  // 3. Manejo de Likes Dinámico
+  // 3. Manejo de Likes Dinámico (optimista, revertido si el backend falla)
   const toggleLike = async (postId: string | number) => {
     const isCurrentlyLiked = likedPosts.includes(postId);
 
-    setLikedPosts(prev => 
+    setLikedPosts(prev =>
       isCurrentlyLiked ? prev.filter(id => id !== postId) : [...prev, postId]
     );
 
@@ -247,17 +245,30 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       return p;
     }));
 
-    try {
-      await fetch('/api/posts', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'like',
-          postId,
-          username: rawUsername
-        })
-      });
-    } catch {}
+    const res = await toggleLikePostAction(postId);
+
+    if (!res.success) {
+      // Revertir el cambio optimista si el backend rechazó la reacción
+      setLikedPosts(prev =>
+        isCurrentlyLiked ? [...prev, postId] : prev.filter(id => id !== postId)
+      );
+      setPosts(prev => prev.map(p => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            likes: isCurrentlyLiked ? p.likes + 1 : Math.max(0, p.likes - 1)
+          };
+        }
+        return p;
+      }));
+      toast.error(res.error || "No se pudo procesar tu reacción");
+      return;
+    }
+
+    // Reconciliar con el valor real del backend
+    if (typeof res.likes === 'number') {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: res.likes as number } : p));
+    }
   };
 
   // 4. Compartir Obra
@@ -269,21 +280,37 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
     }
   };
 
-  // 5. Enviar Comentario en Vivo
+  // 5. Abrir Drawer de Comentarios y Cargar los Reales del Backend
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const handleOpenComments = async (post: PostType) => {
+    setActiveCommentPost(post);
+    setIsLoadingComments(true);
+    const res = await getPostCommentsAction(post.id);
+    setIsLoadingComments(false);
+    if (res.success) {
+      setActiveCommentPost(prev => prev && prev.id === post.id ? { ...prev, comments_list: res.data } : prev);
+      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, comments_list: res.data } : p));
+    }
+  };
+
+  // 6. Enviar Comentario Real
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim() || !activeCommentPost) return;
 
     setIsSubmittingComment(true);
-    const newComment = {
-      id: `c_${Date.now()}`,
-      author: displayName,
-      handle: `@${rawUsername}`,
-      text: commentText.trim(),
-      time: 'Justo ahora'
-    };
-
     const targetPostId = activeCommentPost.id;
+    const text = commentText.trim();
+
+    const res = await addPostCommentAction(targetPostId, text);
+    setIsSubmittingComment(false);
+
+    if (!res.success || !res.data) {
+      toast.error(res.error || "No se pudo publicar tu comentario");
+      return;
+    }
+
+    const newComment = res.data;
 
     setPosts(prev => prev.map(p => {
       if (p.id === targetPostId) {
@@ -304,22 +331,6 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
 
     setCommentText("");
     toast.success("💬 Comentario publicado");
-
-    try {
-      await fetch('/api/posts', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'comment',
-          postId: targetPostId,
-          username: rawUsername,
-          authorName: displayName,
-          commentText: newComment.text
-        })
-      });
-    } catch {} finally {
-      setIsSubmittingComment(false);
-    }
   };
 
   // 6. Filtrado de Publicaciones por Búsqueda, Tags y Pestañas Multimedia
@@ -384,9 +395,9 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       {/* 3. BARRA CREADORA SUPERIOR (Estilo Facebook / X / LinkedIn) */}
       <div className="bg-zentry-card border border-zentry-border rounded-3xl p-4 sm:p-5 shadow-sm mb-6 space-y-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-purple-950/50 border border-purple-500/30 flex items-center justify-center font-black text-xs text-purple-300 shrink-0 overflow-hidden shadow-sm">
+          <div className="w-10 h-10 rounded-2xl bg-purple-950/50 border border-purple-500/30 flex items-center justify-center font-black text-xs text-purple-300 shrink-0 overflow-hidden shadow-sm relative">
             {user?.avatar_url ? (
-              <img src={getImageUrl(user.avatar_url)} alt={displayName} className="w-full h-full object-cover" />
+              <Image src={getImageUrl(user.avatar_url)} alt={displayName} fill sizes="40px" className="object-cover" />
             ) : (
               getInitials(displayName)
             )}
@@ -472,9 +483,9 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
               key={post.id}
               post={post}
               currentUsername={rawUsername}
-              isLiked={likedPosts.includes(post.id) || (post.liked_by && post.liked_by.includes(rawUsername))}
+              isLiked={likedPosts.includes(post.id)}
               onLike={toggleLike}
-              onComment={(p) => setActiveCommentPost(p)}
+              onComment={handleOpenComments}
               onShare={handleShare}
               isListMode={layoutStyle === 'list'}
             />
@@ -517,7 +528,11 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
 
               {/* Lista de Comentarios */}
               <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                {(!activeCommentPost.comments_list || activeCommentPost.comments_list.length === 0) ? (
+                {isLoadingComments ? (
+                  <div className="py-12 flex justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-zentry-text-2" />
+                  </div>
+                ) : (!activeCommentPost.comments_list || activeCommentPost.comments_list.length === 0) ? (
                   <div className="py-12 text-center text-zentry-text-2 space-y-2">
                     <MessageSquare className="w-8 h-8 mx-auto opacity-40" />
                     <p className="text-xs font-bold text-zentry-text-1">Aún no hay comentarios</p>
@@ -528,7 +543,7 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
                     <div key={c.id} className="p-3 bg-zentry-bg rounded-2xl border border-zentry-border/70 space-y-1">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-zentry-text-1">{c.author}</span>
-                        <span className="text-[10px] text-zentry-text-2 font-mono">{c.time}</span>
+                        <span className="text-[10px] text-zentry-text-2 font-mono">{timeAgo(c.time)}</span>
                       </div>
                       <p className="text-xs text-zentry-text-1 leading-relaxed">{c.text}</p>
                     </div>

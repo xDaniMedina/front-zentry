@@ -4,12 +4,12 @@ import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Heart, MessageSquare, Share2, Bookmark, MoreHorizontal, 
-  Play, Pause, Volume2, VolumeX, Sparkles, Music, Maximize2,
-  CheckCircle, Copy, Link as LinkIcon, Flag, Eye
+  Play, Pause, Volume2, VolumeX, Music, Maximize2, Copy, Flag, Eye
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { getImageUrl, getInitials } from "@/lib/utils"
+import { getImageUrl, getInitials, timeAgo } from "@/lib/utils"
+import Image from "next/image"
 
 export type CommentItem = {
   id: string;
@@ -35,8 +35,7 @@ export type PostType = {
   comments: number;
   tags?: string[];
   comments_list?: CommentItem[];
-  liked_by?: string[];
-  saved_by?: string[];
+  liked?: boolean;
   height?: string;
   color?: string;
 };
@@ -187,10 +186,10 @@ export function FeedCard({
         <div className="flex items-center gap-3 min-w-0">
           <Link 
             href={`/profile/${encodeURIComponent(cleanUsername)}`} 
-            className="w-10 h-10 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-center text-xs font-black text-purple-300 hover:border-zentry-accent hover:scale-105 transition-all shrink-0 overflow-hidden shadow-sm"
+            className="relative w-10 h-10 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-center text-xs font-black text-purple-300 hover:border-zentry-accent hover:scale-105 transition-all shrink-0 overflow-hidden shadow-sm"
           >
             {post.avatar_url ? (
-              <img src={getImageUrl(post.avatar_url)} alt={post.author} className="w-full h-full object-cover" />
+              <Image src={getImageUrl(post.avatar_url)} alt={post.author} fill sizes="40px" className="object-cover" />
             ) : (
               post.avatar || getInitials(post.author || cleanUsername)
             )}
@@ -211,7 +210,7 @@ export function FeedCard({
               )}
             </div>
             <p className="text-[11px] text-zentry-text-2 truncate">
-              {post.handle} • <span className="font-mono text-[10px]">{post.created_at}</span>
+              {post.handle} • <span className="font-mono text-[10px]">{timeAgo(post.created_at)}</span>
             </p>
           </div>
         </div>
@@ -293,13 +292,15 @@ export function FeedCard({
         {/* 🖼️ IMAGEN */}
         {post.media_type === 'image' && post.media_url && (
           <div 
-            className="relative w-full overflow-hidden cursor-pointer select-none group bg-zinc-950"
+            className="relative w-full overflow-hidden cursor-pointer select-none group bg-zinc-950 flex items-center justify-center"
             onDoubleClick={handleDoubleClickImage}
           >
-            <img 
+            <Image 
               src={post.media_url} 
               alt={post.title} 
-              className="w-full max-h-[500px] object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+              width={800}
+              height={500}
+              className="w-full h-auto max-h-[500px] object-cover transition-transform duration-500 group-hover:scale-[1.01]"
               loading="lazy"
             />
 
@@ -528,10 +529,12 @@ export function FeedCard({
               exit={{ scale: 0.9, opacity: 0 }}
               className="relative max-w-5xl max-h-[90vh] flex flex-col items-center"
             >
-              <img 
+              <Image 
                 src={post.media_url} 
                 alt={post.title} 
-                className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+                width={1200}
+                height={800}
+                className="max-w-full max-h-[80vh] w-auto h-auto object-contain rounded-2xl shadow-2xl border border-white/10"
               />
               <div className="mt-3 text-center text-white">
                 <h4 className="font-extrabold text-sm">{post.title}</h4>

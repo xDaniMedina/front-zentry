@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { 
   Bell, Heart, UserPlus, Star, CheckCheck, MessageSquare, Trash2, 
-  Sparkles, Loader2 
+  Sparkles 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";

@@ -1,15 +1,16 @@
-﻿"use client"
+"use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  X, Pause, Play, Heart, Send, Volume2, VolumeX, 
-  ChevronLeft, ChevronRight, Music, Share2, Sparkles, Smile,
-  MoreHorizontal, Trash2, Eye
+  X, Pause, Play, Heart, Send, 
+  ChevronLeft, ChevronRight, Music, Share2,
+  MoreHorizontal, Trash2
 } from "lucide-react"
 import { getInitials, getImageUrl, cn } from "@/lib/utils"
 import { UserStoryGroup, StoryItem } from "@/types/stories"
 import { toast } from "sonner"
+import Image from "next/image"
 
 interface StoryViewerProps {
   storyGroups: UserStoryGroup[];
@@ -291,12 +292,13 @@ export default function StoryViewer({
           {/* Información del Creador y Acciones */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full ring-2 ring-gradient-to-tr from-amber-400 to-purple-600 p-0.5 shrink-0 overflow-hidden bg-zinc-900 shadow-md">
+              <div className="relative w-9 h-9 rounded-full ring-2 ring-gradient-to-tr from-amber-400 to-purple-600 p-0.5 shrink-0 overflow-hidden bg-zinc-900 shadow-md">
                 {currentGroup.avatar_url ? (
-                  <img 
+                  <Image 
                     src={getImageUrl(currentGroup.avatar_url)} 
-                    alt={currentGroup.name} 
-                    className="w-full h-full object-cover rounded-full" 
+                    alt={currentGroup.name || "avatar"} 
+                    fill sizes="40px"
+                    className="object-cover rounded-full" 
                   />
                 ) : (
                   <div className="w-full h-full rounded-full bg-zentry-card flex items-center justify-center text-xs font-black text-white">
@@ -394,17 +396,18 @@ export default function StoryViewer({
           <AnimatePresence mode="wait">
             <motion.div 
               key={currentStory.id}
-              initial={{ opacity: 0, scale: 0.98 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.02 }}
+              exit={{ opacity: 0, scale: 1.05 }}
               transition={{ duration: 0.2 }}
-              className="w-full h-full flex items-center justify-center"
+              className="relative w-full h-full flex items-center justify-center"
             >
               {currentStory.type === 'image' && currentStory.media_url && (
-                <img 
+                <Image 
                   src={getImageUrl(currentStory.media_url)} 
                   alt={currentStory.caption || "Historia"} 
-                  className="w-full h-full object-cover select-none pointer-events-none"
+                  fill sizes="100vw"
+                  className="object-cover select-none pointer-events-none" 
                 />
               )}
 

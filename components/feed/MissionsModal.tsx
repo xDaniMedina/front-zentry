@@ -3,25 +3,21 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Flame, Trophy, CheckCircle2, Sparkles, X, 
-  Lock, Gift, Check, Award, Filter, RefreshCw, Star,
-  HelpCircle, Eye, EyeOff, Key, Zap, ShieldAlert, User,
-  Compass, MessageCircle, Heart, Share2, Bookmark, Upload, Users
+import {
+  Flame, Trophy, CheckCircle2, X,
+  Lock, Gift, Filter, RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { 
-  DailyMission, 
-  AchievementItem, 
-  saveUserDailyMissionsState, 
-  saveUserAchievementsState,
-  getTodayDateString 
+import {
+  DailyMission,
+  AchievementItem,
+  getTodayDateString
 } from "@/lib/gamification";
-import { fetchDailyMissions, fetchAchievements, claimMission, claimAchievement } from "@/lib/actions/gamification";
+import { fetchDailyMissions, fetchAchievements, claimMission } from "@/lib/actions/gamification";
 
 export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'missions' | 'achievements'>('missions');
   const [selectedAchievementCategory, setSelectedAchievementCategory] = useState<string>('all');
@@ -70,39 +66,18 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
     };
   }, [isOpen, mounted, onClose]);
 
-  const claimMissionReward = async (id: string, coins: number) => {
+  const claimMissionReward = async (id: number, coins: number) => {
     const res = await claimMission(id);
     if (res.success) {
       const updated = missions.map(m => m.id === id ? { ...m, isClaimed: true } : m);
       setMissions(updated);
 
-      // Verificar si desbloquea logro secreto de reclamar recompensas
-      const claimedCount = updated.filter(m => m.isClaimed).length;
-      if (claimedCount >= 3) {
-        unlockAchievement('ach_secret_master_key');
-      }
+      const newBalance = (user?.zentry_coins || 0) + coins;
+      updateUser({ zentry_coins: newBalance });
 
       toast.success(`¡Recompensa reclamada! +${coins} Zentry Coins para @${user?.username || 'ti'} 🎉`);
     } else {
-      toast.error("Hubo un problema al reclamar tu recompensa.");
-    }
-  };
-
-  const unlockAchievement = async (id: string) => {
-    const res = await claimAchievement(id);
-    if (res.success) {
-      const updated = achievements.map(a => {
-        if (a.id === id && !a.isUnlocked) {
-          toast.success(`✨ ¡LOGRO MISTERIOSO DESBLOQUEADO: ${a.title}! +${a.rewardCoins} ZC`);
-          return {
-            ...a,
-            isUnlocked: true,
-            unlockedDate: '¡Recién descubierto!'
-          };
-        }
-        return a;
-      });
-      setAchievements(updated);
+      toast.error(res.error || "Hubo un problema al reclamar tu recompensa.");
     }
   };
 
@@ -410,17 +385,9 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
                             <span className="text-emerald-400 font-bold flex items-center gap-1 text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Desbloqueado
                             </span>
-                          ) : isMysterious ? (
-                            <button
-                              onClick={() => unlockAchievement(ach.id)}
-                              className="text-[11px] font-extrabold text-pink-300 hover:text-white flex items-center gap-1 bg-pink-500/25 hover:bg-pink-500/40 px-2.5 py-1 rounded-lg border border-pink-500/40 transition-colors shadow-sm"
-                              title="Descubrir logro misterioso"
-                            >
-                              <Zap className="w-3 h-3 text-pink-400" /> Descifrar enigma
-                            </button>
                           ) : (
                             <span className="text-zinc-400 flex items-center gap-1 font-mono text-[11px]">
-                              <Lock className="w-3.5 h-3.5" /> En progreso ({ach.progress || 0}/{ach.maxProgress || 1})
+                              <Lock className="w-3.5 h-3.5" /> {isMysterious ? 'Por descubrir' : 'Bloqueado'}
                             </span>
                           )}
                           <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full border ${rarityBadge}`}>

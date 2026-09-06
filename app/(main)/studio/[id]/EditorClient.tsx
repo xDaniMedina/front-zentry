@@ -3,15 +3,14 @@
 import { useState, useRef, useEffect, useTransition, ElementType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
-  MousePointer2, PenTool, Type, Square, Circle, Eraser, 
+  MousePointer2, PenTool, Eraser, 
   Layers, Download, Save, ArrowLeft, ZoomIn, ZoomOut, 
   Play, Pause, Scissors, SlidersHorizontal, Image as ImageIcon,
-  Music, Video, Loader2, CheckCircle2, Settings2,
-  Palette, Grid, Trash2, RotateCcw, RotateCw, FileText, AlignLeft, AlignCenter, 
-  AlignRight, AlignJustify, Bold, Italic, Underline, Strikethrough, Heading1, Heading2, 
+  Music, Video, Loader2, CheckCircle2, Grid, Trash2, RotateCw, AlignLeft, AlignCenter, 
+  AlignRight, Bold, Italic, Underline, Strikethrough, Heading1, Heading2, 
   List, ListOrdered, Quote, Code, Volume2, VolumeX, FastForward, Rewind,
-  Pipette, PaintBucket, FlipHorizontal, FlipVertical, Crop, Sparkles,
-  Undo2, Redo2, Plus, Minus, FileCode, Check, RefreshCw, Maximize2
+  Pipette, PaintBucket, FlipHorizontal, Crop,
+  Undo2, Redo2, Plus, Check
 } from "lucide-react";
 import { toast } from "sonner";
 import { saveStudioProjectAction } from "@/lib/actions/studio";

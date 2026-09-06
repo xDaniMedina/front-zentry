@@ -5,9 +5,12 @@ function isTokenValid(token: string): boolean {
   try {
     const payloadB64 = token.split('.')[1];
     if (!payloadB64) return false;
-    const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    let normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    while (normalized.length % 4 !== 0) {
+      normalized += '=';
+    }
     const payload = JSON.parse(atob(normalized));
-    if (typeof payload.exp !== 'number') return true; // sin exp, se deja pasar (el backend igual valida la firma)
+    if (typeof payload.exp !== 'number') return true;
     return payload.exp * 1000 > Date.now();
   } catch {
     return false;
@@ -18,7 +21,7 @@ export default function proxy(request: NextRequest) {
   const token = request.cookies.get('zentry_token')?.value;
   const { pathname } = request.nextUrl;
 
-  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
+  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/verify');
   const hasValidToken = !!token && isTokenValid(token);
 
   if (pathname === '/') {
@@ -53,5 +56,6 @@ export const config = {
     '/settings/:path*',
     '/login',
     '/register',
+    '/verify',
   ]
 }

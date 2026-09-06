@@ -11,7 +11,7 @@ export async function getStudioProjects(): Promise<{ success: boolean; data?: St
       return { success: false, error: 'No se pudieron cargar los proyectos del estudio' }
     }
     const posts = Array.isArray(res) ? res : (res.content || res.data || [])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const mapped: StudioProject[] = posts.map((p: any) => ({
       id: String(p.id),
       title: p.title || 'Proyecto sin título',
@@ -67,9 +67,9 @@ export async function saveStudioProjectAction(payload: {
   type: string
   content?: string
   imageBlob?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   metadata?: Record<string, any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
 }): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const isNumericId = payload.id && !isNaN(Number(payload.id)) && Number(payload.id) > 0

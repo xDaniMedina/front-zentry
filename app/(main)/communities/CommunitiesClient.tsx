@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Users, Globe, Plus, X, Edit3, Trash2, Loader2, UserCheck, ShieldCheck, Search, Flame, Sparkles, Lock, MessageSquare } from "lucide-react";
+import { Users, Globe, Plus, X, Edit3, Trash2, Loader2, UserCheck, Search, Flame, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { createCommunityAction, updateCommunityAction, deleteCommunityAction, joinCommunityAction, leaveCommunityAction } from "@/lib/actions/communities";
+import { createCommunityAction, updateCommunityConfigAction, deleteCommunityAction, joinCommunityAction, leaveCommunityAction } from "@/lib/actions/communities";
 
 export type CommunitySummary = {
   id: string;
@@ -21,50 +22,9 @@ export type CommunitySummary = {
   bannerGradient?: string;
 }
 
-const FALLBACK_COMMUNITIES: CommunitySummary[] = [
-  { 
-    id: '1', 
-    slug: 'ui-ux-designers', 
-    name: 'UI/UX Designers Hub', 
-    members: 12500, 
-    description: 'Comunidad dedicada a feedback de interfaces, diseño de experiencia de usuario y recursos de Figma.', 
-    isJoined: true, 
-    ownerUsername: 'admin',
-    category: 'Diseño',
-    postsPerDay: 24,
-    bannerGradient: 'from-purple-600/30 via-indigo-600/20 to-blue-600/30'
-  },
-  { 
-    id: '2', 
-    slug: 'digital-art', 
-    name: 'Digital Art Masters', 
-    members: 8400, 
-    description: 'Espacio para ilustradores digitales, arte 3D y concept art. Comparte tu portafolio y recibe críticas constructivas.', 
-    isJoined: true, 
-    ownerUsername: 'artist',
-    category: 'Arte Digital',
-    postsPerDay: 18,
-    bannerGradient: 'from-pink-600/30 via-purple-600/20 to-rose-600/30'
-  },
-  { 
-    id: '3', 
-    slug: 'nextjs-devs', 
-    name: 'Next.js & React Devs', 
-    members: 5200, 
-    description: 'Desarrollo web moderno con Next.js App Router, Tailwind CSS, TypeScript y arquitectura frontend.', 
-    isJoined: false, 
-    ownerUsername: 'dev',
-    category: 'Programación',
-    postsPerDay: 12,
-    bannerGradient: 'from-cyan-600/30 via-blue-600/20 to-teal-600/30'
-  },
-];
-
 export default function CommunitiesClient({ initialData }: { initialData: CommunitySummary[] | null }) {
   const { user } = useAuth();
-  const [communities, setCommunities] = useState<CommunitySummary[]>(
-    initialData && initialData.length > 0 ? initialData : FALLBACK_COMMUNITIES
-  );
+  const [communities, setCommunities] = useState<CommunitySummary[]>(initialData || []);
   const [activeTab, setActiveTab] = useState<'joined' | 'discover'>('joined');
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Todas");
@@ -123,13 +83,20 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
 
     try {
       if (editingCommunity) {
-        const res = await updateCommunityAction(editingCommunity.id, payload);
+        const res = await updateCommunityConfigAction(editingCommunity.id, {
+          name: commName,
+          description: commDesc,
+          category: commCategory,
+        });
 
         if (res.success && res.data) {
           const updated = res.data;
           setCommunities(prev => prev.map(c => c.id === editingCommunity.id ? { ...c, ...updated } : c));
+          setIsModalOpen(false);
+          setCommName("");
+          setCommDesc("");
         } else {
-          setCommunities(prev => prev.map(c => c.id === editingCommunity.id ? { ...c, name: commName, description: commDesc, slug, category: commCategory } : c));
+          toast.error(res.error || "No se pudo actualizar la comunidad");
         }
       } else {
         const res = await createCommunityAction(payload);
@@ -137,50 +104,17 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
         if (res.success && res.data) {
           const created = res.data;
           setCommunities(prev => [created, ...prev]);
+          setActiveTab('joined');
+          setIsModalOpen(false);
+          setCommName("");
+          setCommDesc("");
         } else {
-          const newComm: CommunitySummary = {
-            id: Date.now().toString(),
-            slug,
-            name: commName,
-            members: 1,
-            description: commDesc,
-            isJoined: true,
-            ownerUsername: user?.username || 'admin',
-            isAdmin: true,
-            category: commCategory,
-            postsPerDay: 1,
-            bannerGradient: 'from-purple-600/30 to-blue-600/30'
-          };
-          setCommunities(prev => [newComm, ...prev]);
+          toast.error(res.error || "No se pudo crear la comunidad");
         }
-        setActiveTab('joined');
       }
-
-      setIsModalOpen(false);
-      setCommName("");
-      setCommDesc("");
     } catch (err) {
       console.error("Error al guardar comunidad en backend:", err);
-      if (editingCommunity) {
-        setCommunities(prev => prev.map(c => c.id === editingCommunity.id ? { ...c, name: commName, description: commDesc, slug, category: commCategory } : c));
-      } else {
-        const newComm: CommunitySummary = {
-          id: Date.now().toString(),
-          slug,
-          name: commName,
-          members: 1,
-          description: commDesc,
-          isJoined: true,
-          ownerUsername: user?.username || 'admin',
-          isAdmin: true,
-          category: commCategory,
-          postsPerDay: 1,
-          bannerGradient: 'from-purple-600/30 to-blue-600/30'
-        };
-        setCommunities(prev => [newComm, ...prev]);
-        setActiveTab('joined');
-      }
-      setIsModalOpen(false);
+      toast.error("Error de conexión al guardar la comunidad");
     } finally {
       setIsLoading(false);
     }
@@ -189,13 +123,12 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
   const handleDeleteCommunitySummary = async (id: string) => {
     if (!confirm("¿Estás seguro de que deseas eliminar esta comunidad?")) return;
 
-    try {
-      await deleteCommunityAction(id);
-    } catch (err) {
-      console.error("Error al eliminar comunidad en backend:", err);
+    const res = await deleteCommunityAction(id);
+    if (res.success) {
+      setCommunities(prev => prev.filter(c => c.id !== id));
+    } else {
+      toast.error(res.error || "No se pudo eliminar la comunidad");
     }
-
-    setCommunities(prev => prev.filter(c => c.id !== id));
   };
 
   const handleToggleJoin = async (community: CommunitySummary) => {
@@ -207,10 +140,14 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
       members: newJoined ? c.members + 1 : Math.max(0, c.members - 1)
     } : c));
 
-    try {
-      await (newJoined ? joinCommunityAction(community.id) : leaveCommunityAction(community.id));
-    } catch (err) {
-      console.error("Error al cambiar estado de membresía en backend:", err);
+    const res = await (newJoined ? joinCommunityAction(community.id) : leaveCommunityAction(community.id));
+    if (res.success && res.data) {
+      const fresh = res.data;
+      setCommunities(prev => prev.map(c => c.id === community.id ? { ...c, ...fresh } : c));
+    } else if (!res.success) {
+      // Revertir el cambio optimista si el backend rechazó la acción
+      setCommunities(prev => prev.map(c => c.id === community.id ? community : c));
+      toast.error(res.error || "No se pudo actualizar tu membresía");
     }
   };
 

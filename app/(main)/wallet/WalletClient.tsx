@@ -1,15 +1,15 @@
 "use client"
 
-import { useState } from "react";
-import { motion, Variants, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, Variants } from "framer-motion";
 import { 
   Wallet, ArrowUpRight, ArrowDownLeft, Send, Plus, History, 
-  Zap, CreditCard, X, CheckCircle2, Crown, Sparkles, ShieldCheck, 
-  Tv, Film, AlertCircle, RefreshCw, Check, Star, Lock
+  Zap, X, CheckCircle2, Crown, Check, CreditCard, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { subscribeToPlanAction, sendCoinsAction, topupCoinsAction } from "@/lib/actions/wallet";
+import { subscribeToPlanAction, sendCoinsAction, topupCoinsAction, getWalletBalance } from "@/lib/actions/wallet";
+import useSWR from "swr";
 
 export type WalletTransaction = { 
   id: string; 
@@ -106,7 +106,24 @@ const containerVariants: Variants = { hidden: { opacity: 0 }, show: { opacity: 1
 
 export default function WalletClient({ initialData }: { initialData: WalletData | null }) {
   const { user } = useAuth();
+  
+  const { data: swrRes } = useSWR(
+    'walletBalance',
+    async () => await getWalletBalance(),
+    { refreshInterval: 15000 }
+  );
+
   const [data, setData] = useState<WalletData>(initialData || FALLBACK_WALLET);
+
+  useEffect(() => {
+    if (swrRes && swrRes.success) {
+      setData(prev => ({
+        ...prev,
+        balance: swrRes.coins ?? prev.balance,
+        transactions: (swrRes.transactions && swrRes.transactions.length > 0) ? (swrRes.transactions as unknown as WalletTransaction[]) : prev.transactions,
+      }));
+    }
+  }, [swrRes]);
   
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [activeTab, setActiveTab] = useState<'plans' | 'balance' | 'history'>('plans');
@@ -117,7 +134,45 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
   const [sendAmount, setSendAmount] = useState("");
   const [topupAmount, setTopupAmount] = useState(500);
 
+  // Estados de Tarjeta de Crédito
+  const [paymentStep, setPaymentStep] = useState<'details' | 'processing' | 'success'>('details');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
+  const [subPaymentMethod, setSubPaymentMethod] = useState<'balance' | 'card'>('balance');
+
   const activePlan = PLANS.find(p => p.id === data.activePlanId) || PLANS[1];
+
+  const resetPaymentForm = () => {
+    setPaymentStep('details');
+    setCardNumber('');
+    setCardName('');
+    setCardExpiry('');
+    setCardCvc('');
+    setSubPaymentMethod('balance');
+  }
+
+  const handleCloseModal = () => {
+    setActiveModal(null);
+    resetPaymentForm();
+  }
+
+  // Formato para tarjeta de crédito
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
+    const matches = v.match(/\d{4,16}/g);
+    const match = matches && matches[0] || ''
+    const parts = []
+    for (let i=0, len=match.length; i<len; i+=4) {
+      parts.push(match.substring(i, i+4))
+    }
+    if (parts.length) {
+      return parts.join(' ')
+    } else {
+      return value
+    }
+  }
 
   // Acción para cambiar de plan de suscripción
   const handleSelectPlan = (plan: SubscriptionPlan) => {
@@ -129,43 +184,59 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
     setActiveModal('confirmSub');
   };
 
-  const handleConfirmSubscription = async () => {
+  const processSubscription = async () => {
     if (!selectedPlanForModal) return;
-
     const cost = billingCycle === 'annual' ? selectedPlanForModal.annualCost * 12 : selectedPlanForModal.monthlyCost;
+    
+    // Validación de tarjeta si se eligió ese método y no es plan gratuito
+    if (selectedPlanForModal.id !== 'free' && subPaymentMethod === 'card') {
+      if (cardNumber.length < 16 || cardName.length < 3 || cardExpiry.length < 4 || cardCvc.length < 3) {
+        toast.error("Por favor completa los datos de tu tarjeta correctamente.");
+        return;
+      }
+    }
 
-    if (cost > data.balance && selectedPlanForModal.id !== 'free') {
-      toast.error(`Saldo insuficiente (${data.balance} ZC). Necesitas ${cost} ZC para este plan.`);
-      setActiveModal('topup');
+    if (subPaymentMethod === 'balance' && cost > data.balance && selectedPlanForModal.id !== 'free') {
+      toast.error(`Saldo insuficiente (${data.balance} ZC).`);
       return;
     }
 
+    setPaymentStep('processing');
+
     try {
+      // Simular delay de pasarela de pagos
+      await new Promise(r => setTimeout(r, 2000));
       await subscribeToPlanAction(selectedPlanForModal.id, billingCycle);
+
+      const balanceDeduction = subPaymentMethod === 'balance' ? cost : 0;
+      const paymentDesc = subPaymentMethod === 'card' ? ` (Pago con Tarjeta **${cardNumber.slice(-4)})` : '';
 
       setData(prev => ({
         ...prev,
         activePlanId: selectedPlanForModal.id,
-        balance: Math.max(0, prev.balance - cost),
+        balance: Math.max(0, prev.balance - balanceDeduction),
         transactions: [
           {
             id: `t-${Date.now()}`,
             type: 'egreso',
             amount: cost,
-            description: `Suscripción ${selectedPlanForModal.name} (${billingCycle === 'annual' ? 'Anual' : 'Mensual'})`,
+            description: `Suscripción ${selectedPlanForModal.name} (${billingCycle === 'annual' ? 'Anual' : 'Mensual'})${paymentDesc}`,
             date: 'Justo ahora'
           },
           ...prev.transactions
         ]
       }));
 
-      toast.success(`¡Felicidades! Ahora estás suscrito a ${selectedPlanForModal.name}`);
-      setActiveModal(null);
+      setPaymentStep('success');
+      setTimeout(() => {
+        toast.success(`¡Felicidades! Ahora estás suscrito a ${selectedPlanForModal.name}`);
+        handleCloseModal();
+      }, 1500);
+
     } catch (err) {
       console.error("Error al actualizar suscripción:", err);
-      setData(prev => ({ ...prev, activePlanId: selectedPlanForModal.id }));
-      toast.success(`Plan ${selectedPlanForModal.name} activado`);
-      setActiveModal(null);
+      toast.error("Ocurrió un error al procesar el pago.");
+      setPaymentStep('details');
     }
   };
 
@@ -202,7 +273,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
       toast.success(`¡Enviados ${amountNum} ZC a @${sendRecipient}!`);
       setSendRecipient("");
       setSendAmount("");
-      setActiveModal(null);
+      handleCloseModal();
     } else {
       toast.error("Error al enviar monedas. Intenta de nuevo.");
     }
@@ -210,29 +281,124 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
 
   // Recargar Saldo
   const handleTopup = async () => {
-    const res = await topupCoinsAction(topupAmount);
-    if (res.success) {
-      setData(prev => ({
-        ...prev,
-        balance: prev.balance + topupAmount,
-        transactions: [
-          {
-            id: `t-${Date.now()}`,
-            type: 'recarga',
-            amount: topupAmount,
-            description: `Recarga de saldo en Billetera`,
-            date: 'Justo ahora'
-          },
-          ...prev.transactions
-        ]
-      }));
+    if (cardNumber.length < 16 || cardName.length < 3 || cardExpiry.length < 4 || cardCvc.length < 3) {
+      toast.error("Por favor completa los datos de tu tarjeta correctamente.");
+      return;
+    }
 
-      toast.success(`¡Recarga exitosa! Se añadieron +${topupAmount} ZC a tu balance`);
-      setActiveModal(null);
-    } else {
-      toast.error("Error al recargar saldo. Intenta de nuevo.");
+    setPaymentStep('processing');
+
+    try {
+      // Simular delay pasarela
+      await new Promise(r => setTimeout(r, 2000));
+      const res = await topupCoinsAction(topupAmount);
+
+      if (res.success) {
+        setData(prev => ({
+          ...prev,
+          balance: prev.balance + topupAmount,
+          transactions: [
+            {
+              id: `t-${Date.now()}`,
+              type: 'recarga',
+              amount: topupAmount,
+              description: `Recarga de saldo en Billetera (Tarjeta **${cardNumber.slice(-4)})`,
+              date: 'Justo ahora'
+            },
+            ...prev.transactions
+          ]
+        }));
+
+        setPaymentStep('success');
+        setTimeout(() => {
+          toast.success(`¡Recarga exitosa! Se añadieron +${topupAmount} ZC a tu balance`);
+          handleCloseModal();
+        }, 1500);
+      } else {
+        toast.error("Error al recargar saldo. Intenta de nuevo.");
+        setPaymentStep('details');
+      }
+    } catch (e) {
+      toast.error("Ocurrió un error en el servidor.");
+      setPaymentStep('details');
     }
   };
+
+  const renderCardForm = () => (
+    <div className="space-y-4 pt-4 border-t border-zentry-border">
+      {/* Visualización de la Tarjeta Premium */}
+      <div className="relative w-full h-44 rounded-2xl bg-gradient-to-tr from-gray-900 via-gray-800 to-black border border-gray-700 p-5 shadow-2xl overflow-hidden flex flex-col justify-between">
+        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white/5 blur-2xl"></div>
+        <div className="flex justify-between items-start z-10">
+          <div className="w-10 h-8 rounded-md bg-gradient-to-br from-yellow-200 to-yellow-600 opacity-80"></div>
+          <span className="font-bold text-white/50 italic text-xl">VISA</span>
+        </div>
+        <div className="z-10 mt-2">
+          <div className="text-xl font-mono text-white/90 tracking-widest min-h-7">
+            {cardNumber || '•••• •••• •••• ••••'}
+          </div>
+        </div>
+        <div className="flex justify-between items-end z-10">
+          <div className="flex flex-col">
+            <span className="text-[9px] text-white/50 uppercase tracking-widest">Card Holder</span>
+            <span className="text-xs text-white/90 font-bold uppercase tracking-wider min-h-4">
+              {cardName || 'YOUR NAME'}
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] text-white/50 uppercase tracking-widest">Expires</span>
+            <span className="text-xs text-white/90 font-bold font-mono min-h-4">
+              {cardExpiry || 'MM/YY'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <input 
+            type="text"
+            value={cardNumber}
+            onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+            maxLength={19}
+            placeholder="Número de Tarjeta"
+            className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors"
+          />
+        </div>
+        <div>
+          <input 
+            type="text"
+            value={cardName}
+            onChange={(e) => setCardName(e.target.value.toUpperCase())}
+            placeholder="Nombre en la Tarjeta"
+            className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors"
+          />
+        </div>
+        <div className="flex gap-3">
+          <input 
+            type="text"
+            value={cardExpiry}
+            onChange={(e) => {
+              let val = e.target.value.replace(/[^0-9]/g, '');
+              if (val.length > 2) val = val.substring(0,2) + '/' + val.substring(2,4);
+              setCardExpiry(val);
+            }}
+            maxLength={5}
+            placeholder="MM/YY"
+            className="w-1/2 bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors"
+          />
+          <input 
+            type="text"
+            value={cardCvc}
+            onChange={(e) => setCardCvc(e.target.value.replace(/[^0-9]/g, ''))}
+            maxLength={4}
+            placeholder="CVC"
+            className="w-1/2 bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors"
+          />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 pb-24 space-y-8">
@@ -285,7 +451,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
       </div>
 
       {/* PESTAÑAS DE NAVEGACIÓN */}
-      <div className="flex items-center gap-4 border-b border-zentry-border pb-1">
+      <div className="flex items-center gap-4 border-b border-zentry-border pb-1 overflow-x-auto">
         {[
           { id: 'plans', label: 'Planes & Membresías', icon: Zap },
           { id: 'balance', label: 'Balance & Recargas', icon: Wallet },
@@ -297,7 +463,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
             <button 
               key={tab.id}
               onClick={() => setActiveTab(tabId)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+              className={`flex shrink-0 items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
                 activeTab === tab.id 
                   ? 'bg-zentry-accent text-white shadow-md shadow-zentry-accent/20' 
                   : 'text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-card'
@@ -311,7 +477,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
 
       {/* SECCIÓN 1: PLANES & MEMBRESÍAS ESTILO NETFLIX / CRUNCHYROLL */}
       {activeTab === 'plans' && (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
           {/* Selector de Ciclo de Facturación (Mensual vs Anual) */}
           <div className="flex items-center justify-center gap-3">
@@ -411,7 +577,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
 
       {/* SECCIÓN 2: BALANCE & ACCIONES */}
       {activeTab === 'balance' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="bg-zentry-card border border-zentry-border rounded-3xl p-6 sm:p-8 space-y-6">
             <h3 className="font-extrabold text-zentry-text-1 text-lg flex items-center gap-2">
               <Wallet className="w-5 h-5 text-zentry-accent" /> Resumen de Balance
@@ -436,7 +602,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
 
       {/* SECCIÓN 3: HISTORIAL DE TRANSACCIONES */}
       {activeTab === 'history' && (
-        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-6 sm:p-8 space-y-6">
+        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-6 sm:p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h3 className="font-extrabold text-zentry-text-1 text-lg flex items-center gap-2">
             <History className="w-5 h-5 text-zentry-accent" /> Historial de Movimientos
           </h3>
@@ -475,41 +641,87 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
       {/* MODAL CONFIRMAR PLAN */}
       {activeModal === 'confirmSub' && selectedPlanForModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200 relative">
+            
+            {paymentStep === 'processing' && (
+              <div className="absolute inset-0 z-50 bg-zentry-card/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl">
+                <Loader2 className="w-10 h-10 text-zentry-accent animate-spin mb-4" />
+                <p className="text-sm font-bold text-zentry-text-1">Procesando pago...</p>
+              </div>
+            )}
+            
+            {paymentStep === 'success' && (
+              <div className="absolute inset-0 z-50 bg-emerald-900/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl text-center p-6">
+                <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-4" />
+                <h3 className="text-xl font-black text-white">¡Pago Exitoso!</h3>
+                <p className="text-sm font-bold text-emerald-200 mt-2">Disfruta de tu suscripción a {selectedPlanForModal.name}</p>
+              </div>
+            )}
+
             <div className="flex justify-between items-center pb-3 border-b border-zentry-border">
               <h3 className="text-lg font-extrabold text-zentry-text-1 flex items-center gap-2">
-                <Crown className="w-5 h-5 text-amber-400" /> Cambiar a {selectedPlanForModal.name}
+                <Crown className="w-5 h-5 text-amber-400" /> Confirmar Suscripción
               </h3>
-              <button onClick={() => setActiveModal(null)} className="text-zentry-text-2 hover:text-zentry-text-1">
+              <button onClick={handleCloseModal} className="text-zentry-text-2 hover:text-zentry-text-1 disabled:opacity-50" disabled={paymentStep !== 'details'}>
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs text-zentry-text-2">
-              <p className="leading-relaxed">
-                Estás por suscribirte al plan <strong className="text-zentry-text-1">{selectedPlanForModal.name}</strong> con facturación {billingCycle === 'annual' ? 'Anual' : 'Mensual'}.
-              </p>
-
               <div className="bg-zentry-bg p-4 rounded-2xl border border-zentry-border space-y-2">
                 <div className="flex justify-between">
-                  <span>Costo del plan:</span>
-                  <span className="font-bold text-zentry-text-1">
-                    {billingCycle === 'annual' ? selectedPlanForModal.annualCost * 12 : selectedPlanForModal.monthlyCost} ZC
-                  </span>
+                  <span>Plan Seleccionado:</span>
+                  <span className="font-bold text-zentry-text-1">{selectedPlanForModal.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tu saldo actual:</span>
-                  <span className="font-bold text-emerald-400">{data.balance} ZC</span>
+                  <span>Ciclo de facturación:</span>
+                  <span className="font-bold text-zentry-text-1">{billingCycle === 'annual' ? 'Anual' : 'Mensual'}</span>
+                </div>
+                <div className="flex justify-between border-t border-zentry-border/50 pt-2 mt-2">
+                  <span>Total a Pagar:</span>
+                  <span className="font-bold text-emerald-400 text-sm">
+                    {billingCycle === 'annual' ? selectedPlanForModal.annualCost * 12 : selectedPlanForModal.monthlyCost} ZC
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setActiveModal(null)} className="flex-1 py-3 font-bold text-xs bg-zentry-bg border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card">
+            {selectedPlanForModal.id !== 'free' && (
+              <div className="space-y-4">
+                <label className="block text-xs font-bold text-zentry-text-2 uppercase">Método de Pago</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSubPaymentMethod('balance')}
+                    className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      subPaymentMethod === 'balance' 
+                        ? 'border-zentry-accent bg-zentry-accent/10 text-zentry-accent' 
+                        : 'border-zentry-border bg-zentry-bg text-zentry-text-2 hover:bg-zentry-border/50'
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4" /> Billetera ({data.balance} ZC)
+                  </button>
+                  <button
+                    onClick={() => setSubPaymentMethod('card')}
+                    className={`p-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      subPaymentMethod === 'card' 
+                        ? 'border-zentry-accent bg-zentry-accent/10 text-zentry-accent' 
+                        : 'border-zentry-border bg-zentry-bg text-zentry-text-2 hover:bg-zentry-border/50'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4" /> Tarjeta Nueva
+                  </button>
+                </div>
+
+                {subPaymentMethod === 'card' && renderCardForm()}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4 border-t border-zentry-border mt-2">
+              <button onClick={handleCloseModal} disabled={paymentStep !== 'details'} className="flex-1 py-3 font-bold text-xs bg-zentry-bg border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={handleConfirmSubscription} className="flex-1 py-3 font-bold text-xs bg-zentry-accent text-white rounded-xl hover:opacity-90">
-                Confirmar Suscripción
+              <button onClick={processSubscription} disabled={paymentStep !== 'details'} className="flex-1 py-3 font-bold text-xs bg-zentry-accent text-white rounded-xl hover:opacity-90 disabled:opacity-50">
+                Confirmar Pago
               </button>
             </div>
           </div>
@@ -519,12 +731,28 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
       {/* MODAL RECARGAR ZENTRY COINS */}
       {activeModal === 'topup' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5">
+          <div className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5 relative animate-in fade-in zoom-in-95 duration-200">
+            
+            {paymentStep === 'processing' && (
+              <div className="absolute inset-0 z-50 bg-zentry-card/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl">
+                <Loader2 className="w-10 h-10 text-zentry-accent animate-spin mb-4" />
+                <p className="text-sm font-bold text-zentry-text-1">Procesando pago seguro...</p>
+              </div>
+            )}
+            
+            {paymentStep === 'success' && (
+              <div className="absolute inset-0 z-50 bg-emerald-900/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl text-center p-6">
+                <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-4" />
+                <h3 className="text-xl font-black text-white">¡Recarga Exitosa!</h3>
+                <p className="text-sm font-bold text-emerald-200 mt-2">Se han acreditado +{topupAmount} ZC a tu billetera.</p>
+              </div>
+            )}
+
             <div className="flex justify-between items-center pb-3 border-b border-zentry-border">
               <h3 className="text-lg font-extrabold text-zentry-text-1 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-zentry-accent" /> Recargar Zentry Coins
               </h3>
-              <button onClick={() => setActiveModal(null)} className="text-zentry-text-2 hover:text-zentry-text-1">
+              <button onClick={handleCloseModal} disabled={paymentStep !== 'details'} className="text-zentry-text-2 hover:text-zentry-text-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -539,22 +767,27 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
                     onClick={() => setTopupAmount(amt)}
                     className={`p-3 rounded-2xl border text-center font-bold text-xs transition-all ${
                       topupAmount === amt 
-                        ? 'border-zentry-accent bg-zentry-accent/20 text-zentry-accent' 
+                        ? 'border-zentry-accent bg-zentry-accent/20 text-zentry-accent shadow-md shadow-zentry-accent/20' 
                         : 'border-zentry-border bg-zentry-bg text-zentry-text-1 hover:border-zentry-border/80'
                     }`}
                   >
                     +{amt} ZC
+                    <span className="block mt-1 text-[10px] font-normal opacity-70">
+                      ${(amt * 0.02).toFixed(2)} USD
+                    </span>
                   </button>
                 ))}
               </div>
+
+              {renderCardForm()}
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setActiveModal(null)} className="flex-1 py-3 font-bold text-xs bg-zentry-bg border border-zentry-border rounded-xl text-zentry-text-1">
+            <div className="flex gap-3 pt-2 border-t border-zentry-border mt-4">
+              <button onClick={handleCloseModal} disabled={paymentStep !== 'details'} className="flex-1 py-3 font-bold text-xs bg-zentry-bg border border-zentry-border rounded-xl text-zentry-text-1 disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={handleTopup} className="flex-1 py-3 font-bold text-xs bg-zentry-text-1 text-zentry-bg rounded-xl hover:opacity-90">
-                Confirmar Recarga
+              <button onClick={handleTopup} disabled={paymentStep !== 'details'} className="flex-1 py-3 font-bold text-xs bg-zentry-text-1 text-zentry-bg rounded-xl hover:opacity-90 disabled:opacity-50">
+                Pagar ${(topupAmount * 0.02).toFixed(2)} USD
               </button>
             </div>
           </div>
@@ -564,12 +797,12 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
       {/* MODAL ENVIAR COINS */}
       {activeModal === 'send' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5">
+          <div className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center pb-3 border-b border-zentry-border">
               <h3 className="text-lg font-extrabold text-zentry-text-1 flex items-center gap-2">
                 <Send className="w-5 h-5 text-zentry-accent" /> Enviar Zentry Coins
               </h3>
-              <button onClick={() => setActiveModal(null)} className="text-zentry-text-2 hover:text-zentry-text-1">
+              <button onClick={handleCloseModal} className="text-zentry-text-2 hover:text-zentry-text-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -601,7 +834,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setActiveModal(null)} className="flex-1 py-3 font-bold text-xs bg-zentry-bg border border-zentry-border rounded-xl text-zentry-text-1">
+                <button type="button" onClick={handleCloseModal} className="flex-1 py-3 font-bold text-xs bg-zentry-bg border border-zentry-border rounded-xl text-zentry-text-1">
                   Cancelar
                 </button>
                 <button type="submit" className="flex-1 py-3 font-bold text-xs bg-zentry-accent text-white rounded-xl hover:opacity-90">

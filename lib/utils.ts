@@ -36,6 +36,27 @@ export function getInitials(name: string): string {
 }
 
 /**
+ * Formatea una fecha como tiempo relativo ("Hace 5 min", "Hace 2 h").
+ */
+export function timeAgo(date?: string | Date | null): string {
+  if (!date) return '';
+  const then = new Date(date).getTime();
+  if (Number.isNaN(then)) return '';
+
+  const diffMs = Date.now() - then;
+  const diffSec = Math.floor(diffMs / 1000);
+
+  if (diffSec < 60) return 'Justo ahora';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Hace ${diffMin} min`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `Hace ${diffHours} h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `Hace ${diffDays} d`;
+  return formatDate(date);
+}
+
+/**
  * Resuelve URLs absolutas de uploads y assets del backend
  */
 export function getImageUrl(path?: string | null): string {
