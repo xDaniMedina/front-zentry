@@ -13,7 +13,7 @@ import {
   Undo2, Redo2, Plus, Check
 } from "lucide-react";
 import { toast } from "sonner";
-import { saveStudioProjectAction } from "@/lib/actions/studio";
+import { createStudioProjectAction, updateStudioProjectAction } from "@/lib/actions/studio";
 import { getImageUrl } from "@/lib/utils";
 import { StudioProject } from "@/types";
 
@@ -43,21 +43,21 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
   // Estados Generales
   const [currentProjectId, setCurrentProjectId] = useState<string>(initialProject?.id || canvasId);
   const [title, setTitle] = useState(initialTitleValue);
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom] = useState<number>(initialProject?.metadata?.zoom || 100);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>(fileType === 'image' ? 'filtros' : 'capas');
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   // Estados de Dibujo y Lienzo (Canvas / Pixel Art)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [activeTool, setActiveTool] = useState<Tool>(fileType === 'image' ? 'crop' : 'pen');
-  const [selectedPalette, setSelectedPalette] = useState<keyof typeof COLOR_PALETTES>('zentry');
+  const [selectedPalette, setSelectedPalette] = useState<keyof typeof COLOR_PALETTES>(initialProject?.metadata?.selectedPalette || 'zentry');
   const [selectedColor, setSelectedColor] = useState<string>('#8B5CF6');
   const [strokeWidth, setStrokeWidth] = useState<number>(6);
   const [isPixelArtMode, setIsPixelArtMode] = useState<boolean>(initialProject?.metadata?.isPixelArtMode || false);
-  const [gridSize, setGridSize] = useState<number>(16);
-  const [mirrorMode, setMirrorMode] = useState<boolean>(false);
+  const [gridSize, setGridSize] = useState<number>(initialProject?.metadata?.gridSize || 16);
+  const [mirrorMode, setMirrorMode] = useState<boolean>(initialProject?.metadata?.mirrorMode || false);
   const [isDrawing, setIsDrawing] = useState(false);
   
   // Historial Undo / Redo
@@ -72,7 +72,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Estados de Editor de Fotografía / Imagen (Filtros & Recorte)
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [, setImageSrc] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [brightness, setBrightness] = useState<number>(100);
   const [contrast, setContrast] = useState<number>(100);
@@ -90,15 +90,21 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
   const [cropAspect, setCropAspect] = useState<'free' | '1:1' | '16:9' | '9:16' | '4:5'>('free');
   const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number }>({ x: 60, y: 50, w: 480, h: 360 });
 
-  // Estados de Reproducción Multimedia (Video / Audio)
+  // Estados de Reproducción Multimedia Real (Video / Audio)
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [mediaProgress, setMediaProgress] = useState(0); 
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [mediaProgress, setMediaProgress] = useState(0);
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(
+    initialProject?.metadata?.playbackSpeed || 1.0
+  );
   const [isMuted, setIsMuted] = useState(false);
-  const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('16:9');
-  const [trimIn, setTrimIn] = useState<number>(0);
-  const [trimOut, setTrimOut] = useState<number>(100);
-  const [splitPoints, setSplitPoints] = useState<number[]>([]);
+  const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16' | '1:1'>(
+    initialProject?.metadata?.aspectRatio || '16:9'
+  );
+  const [trimIn, setTrimIn] = useState<number>(initialProject?.metadata?.trimIn || 0);
+  const [trimOut, setTrimOut] = useState<number>(initialProject?.metadata?.trimOut ?? 100);
+  const [splitPoints, setSplitPoints] = useState<number[]>(initialProject?.metadata?.splitPoints || []);
 
   // Inicializar Canvas (con imagen previa del backend si existe)
   useEffect(() => {
@@ -138,22 +144,62 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
     }
   }, [initialProject?.thumbnail_url]);
 
-  // Intervalo de reproducción Multimedia
+  // Reproducción Real de Video/Audio (basada en el elemento <video>/<audio> real)
   useEffect(() => {
-    if (!isPlaying) return;
+    const el = mediaRef.current;
+    if (!el) return;
 
-    const interval = setInterval(() => {
-      setMediaProgress((prev) => {
-        if (prev >= trimOut) {
+    const onTimeUpdate = () => {
+      if (el.duration > 0) {
+        const pct = (el.currentTime / el.duration) * 100;
+        setMediaProgress(pct);
+        if (pct >= trimOut) {
+          el.pause();
           setIsPlaying(false);
-          return trimIn;
         }
-        return prev + (0.5 * playbackSpeed);
-      });
-    }, 100);
+      }
+    };
+    const onLoadedMetadata = () => setMediaDuration(el.duration || 0);
+    const onEnded = () => setIsPlaying(false);
 
-    return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, trimIn, trimOut]);
+    el.addEventListener('timeupdate', onTimeUpdate);
+    el.addEventListener('loadedmetadata', onLoadedMetadata);
+    el.addEventListener('ended', onEnded);
+    return () => {
+      el.removeEventListener('timeupdate', onTimeUpdate);
+      el.removeEventListener('loadedmetadata', onLoadedMetadata);
+      el.removeEventListener('ended', onEnded);
+    };
+  }, [trimOut]);
+
+  useEffect(() => {
+    const el = mediaRef.current;
+    if (!el) return;
+    if (isPlaying) {
+      el.play().catch(() => setIsPlaying(false));
+    } else {
+      el.pause();
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    const el = mediaRef.current;
+    if (el) el.playbackRate = playbackSpeed;
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    const el = mediaRef.current;
+    if (el) el.muted = isMuted;
+  }, [isMuted]);
+
+  const seekMediaTo = (pct: number) => {
+    const clamped = Math.max(0, Math.min(100, pct));
+    setMediaProgress(clamped);
+    const el = mediaRef.current;
+    if (el && mediaDuration > 0) {
+      el.currentTime = (clamped / 100) * mediaDuration;
+    }
+  };
 
   // Guardar estado en Historial
   const pushCanvasState = () => {
@@ -381,46 +427,84 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
     setDocContent(newContent);
   };
 
+  // Genera el PNG a exportar; para el editor de imagen, aplica los filtros en vivo
+  // sobre los píxeles reales (si no, se pierden al guardar, aunque se vean en pantalla).
+  const getExportDataUrl = (): string | undefined => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    if (fileType !== 'image') {
+      return canvas.toDataURL('image/png');
+    }
+
+    const off = document.createElement('canvas');
+    const swapDimensions = rotation % 180 !== 0;
+    off.width = swapDimensions ? canvas.height : canvas.width;
+    off.height = swapDimensions ? canvas.width : canvas.height;
+    const octx = off.getContext('2d');
+    if (!octx) return canvas.toDataURL('image/png');
+
+    octx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) hue-rotate(${hueRotate}deg) blur(${blur}px) sepia(${sepia}%) invert(${invert}%)`;
+    octx.save();
+    octx.translate(off.width / 2, off.height / 2);
+    octx.rotate((rotation * Math.PI) / 180);
+    octx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+    octx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+    octx.restore();
+    return off.toDataURL('image/png');
+  };
+
+  const buildMetadata = (): Record<string, any> => {
+    if (fileType === 'canvas') {
+      return { zoom, isPixelArtMode, gridSize, selectedPalette, mirrorMode };
+    }
+    if (fileType === 'image') {
+      return { zoom, brightness, contrast, saturation, blur, sepia, hueRotate, invert, rotation, flipH, flipV };
+    }
+    if (fileType === 'video' || fileType === 'audio') {
+      return { aspectRatio, trimIn, trimOut, splitPoints, playbackSpeed };
+    }
+    return {};
+  };
+
   const handleSave = () => {
     setIsSaving(true);
 
-    const canvas = canvasRef.current;
-    const dataUrl = canvas ? canvas.toDataURL('image/png') : undefined;
+    const isImageOrCanvas = fileType === 'canvas' || fileType === 'image';
+    const dataUrl = isImageOrCanvas ? getExportDataUrl() : undefined;
+    const type = fileType as StudioProject['type'];
 
     startTransition(async () => {
-      try {
-        const isNumeric = !isNaN(Number(currentProjectId)) && Number(currentProjectId) > 0;
-        const res = await saveStudioProjectAction({
-          id: isNumeric ? currentProjectId : undefined,
-          title,
-          type: fileType,
-          content: fileType === 'document' ? docContent : undefined,
-          imageBlob: dataUrl,
-          metadata: {
-            zoom,
-            aspectRatio,
-            isPixelArtMode,
-            lastEdited: new Date().toISOString()
-          }
-        });
+      const isNumeric = !isNaN(Number(currentProjectId)) && Number(currentProjectId) > 0;
 
-        if (res.success) {
-          if (res.data?.id && String(res.data.id) !== currentProjectId) {
-            const newId = String(res.data.id);
-            setCurrentProjectId(newId);
-            window.history.replaceState(null, '', `/studio/${newId}?type=${fileType}`);
-          }
-          setIsSaving(false);
-          setSaved(true);
-          toast.success("¡Proyecto guardado con éxito!");
-          setTimeout(() => setSaved(false), 2500);
-        } else {
-          setIsSaving(false);
-          toast.error(res.error || "No se pudo guardar el proyecto");
+      const res = isNumeric
+        ? await updateStudioProjectAction(currentProjectId, {
+            title,
+            type,
+            content: fileType === 'document' ? docContent : undefined,
+            metadata: buildMetadata(),
+            imageDataUrl: dataUrl,
+          })
+        : await createStudioProjectAction({
+            title,
+            type,
+            content: fileType === 'document' ? docContent : undefined,
+            metadata: buildMetadata(),
+            imageDataUrl: dataUrl,
+          });
+
+      setIsSaving(false);
+
+      if (res.success && res.data) {
+        if (String(res.data.id) !== currentProjectId) {
+          const newId = res.data.id;
+          setCurrentProjectId(newId);
+          window.history.replaceState(null, '', `/studio/${newId}`);
         }
-      } catch (err) {
-        setIsSaving(false);
-        toast.error("Error al sincronizar con el servidor");
+        setSaved(true);
+        toast.success("¡Proyecto guardado con éxito!");
+        setTimeout(() => setSaved(false), 2500);
+      } else {
+        toast.error(res.error || "No se pudo guardar el proyecto");
       }
     });
   };
@@ -913,7 +997,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
 
   // 4. SUITE MULTIMEDIA: VIDEO & AUDIO CON LÍNEA DE TIEMPO
   const renderMediaWorkspace = () => {
-    const totalSeconds = 180; 
+    const totalSeconds = Math.floor(mediaDuration);
     const currentSeconds = Math.floor((mediaProgress / 100) * totalSeconds);
     const formatTime = (secs: number) => {
       const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -937,12 +1021,26 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
             aspectRatio === '16:9' ? 'aspect-video' : aspectRatio === '9:16' ? 'aspect-[9/16] max-h-[420px]' : 'aspect-square max-h-[420px]'
           }`}>
             {fileType === 'video' ? (
-              <Video className={`w-16 h-16 ${isPlaying ? 'text-zentry-accent animate-pulse' : 'text-zentry-text-2/40'}`} />
+              initialProject?.thumbnail_url ? (
+                <video
+                  ref={(el) => { mediaRef.current = el; }}
+                  src={getImageUrl(initialProject.thumbnail_url)}
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-contain bg-black"
+                />
+              ) : (
+                <Video className={`w-16 h-16 ${isPlaying ? 'text-zentry-accent animate-pulse' : 'text-zentry-text-2/40'}`} />
+              )
             ) : (
-              <Music className={`w-16 h-16 ${isPlaying ? 'text-zentry-accent animate-pulse' : 'text-zentry-text-2/40'}`} />
+              <>
+                {initialProject?.thumbnail_url && (
+                  <audio ref={(el) => { mediaRef.current = el; }} src={getImageUrl(initialProject.thumbnail_url)} />
+                )}
+                <Music className={`w-16 h-16 ${isPlaying ? 'text-zentry-accent animate-pulse' : 'text-zentry-text-2/40'}`} />
+              </>
             )}
-            
-            <p className="text-zentry-text-1 font-extrabold text-sm">
+
+            <p className="relative text-zentry-text-1 font-extrabold text-sm bg-black/40 px-3 py-1 rounded-full">
               {fileType === 'video' ? 'Monitor de Video HD' : 'Monitor de Audio Estéreo'} ({aspectRatio})
             </p>
 
@@ -975,10 +1073,10 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
                 {formatTime(currentSeconds)} / {formatTime(totalSeconds)}
               </span>
 
-              <button onClick={() => setMediaProgress(Math.max(trimIn, mediaProgress - 5))} className="p-2 text-zentry-text-2 hover:text-zentry-text-1 rounded-xl">
+              <button onClick={() => seekMediaTo(Math.max(trimIn, mediaProgress - 5))} className="p-2 text-zentry-text-2 hover:text-zentry-text-1 rounded-xl">
                 <Rewind className="w-4 h-4" />
               </button>
-              <button onClick={() => setMediaProgress(Math.min(trimOut, mediaProgress + 5))} className="p-2 text-zentry-text-2 hover:text-zentry-text-1 rounded-xl">
+              <button onClick={() => seekMediaTo(Math.min(trimOut, mediaProgress + 5))} className="p-2 text-zentry-text-2 hover:text-zentry-text-1 rounded-xl">
                 <FastForward className="w-4 h-4" />
               </button>
 
@@ -1028,7 +1126,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const clickX = e.clientX - rect.left;
-              setMediaProgress((clickX / rect.width) * 100);
+              seekMediaTo((clickX / rect.width) * 100);
             }}
           >
             <div className={`h-8 rounded-xl relative overflow-hidden flex items-center px-3 ${fileType === 'video' ? 'bg-purple-600/30 border border-purple-500/40 text-purple-300' : 'bg-blue-600/30 border border-blue-500/40 text-blue-300'} text-[10px] font-bold`}>

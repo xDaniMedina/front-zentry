@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { STORY_GRADIENTS, STORY_FONTS } from "@/lib/stories"
 import { StoryFontStyle, StoryItem } from "@/types/stories"
+import { createStoryAction } from "@/lib/actions/stories"
 import { useAuth } from "@/context/AuthContext"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -59,6 +60,7 @@ export default function CreateStoryModal({
 
   // Estado para modo multimedia
   const [mediaUrl, setMediaUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
 
   // Estado de música
@@ -71,6 +73,7 @@ export default function CreateStoryModal({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -80,6 +83,11 @@ export default function CreateStoryModal({
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleSelectSampleMedia = (url: string) => {
+    setSelectedFile(null);
+    setMediaUrl(url);
   };
 
   const handleSubmit = async () => {
@@ -94,59 +102,28 @@ export default function CreateStoryModal({
 
     setIsSubmitting(true);
 
-    const rawUsername = (user?.username || user?.email || 'creador').replace(/^@/, '');
-    const displayName = user?.name || user?.username || 'Creador Zentry';
-
-    const newStoryData = {
-      type: activeMode === 'text' ? ('text' as const) : ('image' as const),
-      media_url: activeMode === 'media' ? mediaUrl : undefined,
-      text_content: activeMode === 'text' ? textContent.trim() : undefined,
-      text_color: activeMode === 'text' ? selectedGradient.textColor : '#ffffff',
+    const res = await createStoryAction({
+      type: activeMode === 'text' ? 'text' : 'image',
+      mediaUrl: activeMode === 'media' && !selectedFile ? mediaUrl : undefined,
+      file: activeMode === 'media' ? selectedFile : null,
+      textContent: activeMode === 'text' ? textContent.trim() : undefined,
+      textColor: activeMode === 'text' ? selectedGradient.textColor : '#ffffff',
       background: activeMode === 'text' ? selectedGradient.gradient : undefined,
-      font_style: activeMode === 'text' ? selectedFont : undefined,
+      fontStyle: activeMode === 'text' ? selectedFont : undefined,
       caption: caption.trim() || undefined,
       music: selectedMusic || undefined,
       duration: 5000,
-    };
+    });
 
-    try {
-      const res = await fetch('/api/stories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          username: rawUsername,
-          name: displayName,
-          avatar: displayName.substring(0, 2).toUpperCase(),
-          avatar_url: user?.avatar_url,
-          storyItem: newStoryData
-        })
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          onStoryCreated(json.data);
-          toast.success("✨ ¡Historia publicada con éxito! (+50 XP)");
-          onClose();
-          return;
-        }
-      }
-    } catch (err) {}
-
-    // Fallback local si falla la red
-    const fallbackStory: StoryItem = {
-      id: `story_${Date.now()}`,
-      ...newStoryData,
-      created_at: 'Justo ahora',
-      likes: 0,
-      liked: false
-    };
-
-    onStoryCreated(fallbackStory);
-    toast.success("✨ ¡Historia publicada!");
     setIsSubmitting(false);
-    onClose();
+
+    if (res.success && res.data) {
+      onStoryCreated(res.data);
+      toast.success("✨ ¡Historia publicada con éxito!");
+      onClose();
+    } else {
+      toast.error(res.error || "No se pudo publicar tu historia");
+    }
   };
 
   return (
@@ -373,7 +350,7 @@ export default function CreateStoryModal({
                       <button
                         key={item.name}
                         type="button"
-                        onClick={() => setMediaUrl(item.url)}
+                        onClick={() => handleSelectSampleMedia(item.url)}
                         className={cn(
                           "relative rounded-lg overflow-hidden h-14 border-2 transition-transform",
                           mediaUrl === item.url ? "border-zentry-accent scale-105" : "border-transparent hover:scale-102"

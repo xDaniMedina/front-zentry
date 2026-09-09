@@ -1,54 +1,120 @@
 "use client"
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  Settings, User, Shield, Bell, Palette, CreditCard, KeyRound, Save, Moon, Sun
+  Settings, User, Shield, Bell, Palette, CreditCard, KeyRound, Save, Moon, Sun,
+  LifeBuoy, FileText, BarChart3, Bookmark, Heart, Loader2, Mail, ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/components/providers/ThemeProvider";
-import { updateProfile, updateSecurity } from "@/lib/actions/settings";
-import Link from "next/link";
+import { updateProfile, updateSecurity, updatePrivacySettings } from "@/lib/actions/settings";
+import { getMyProfileAction } from "@/lib/actions/profile";
+import { getUserStatsAction, UserSocialStats } from "@/lib/actions/friends";
+
+type Tab = 'profile' | 'privacy' | 'notifications' | 'appearance' | 'account' | 'stats' | 'support' | 'policies';
 
 export default function SettingsClient() {
   const { user, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'notifications' | 'appearance' | 'account'>('profile');
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
+  const [stats, setStats] = useState<UserSocialStats | null>(null);
 
-  // Form States
-  const [displayName, setDisplayName] = useState(user?.username || "Creador Zentry");
-  const [bio, setBio] = useState("Artista Digital & Diseñador de Interfaces creando en Zentry.");
-  const [website, setWebsite] = useState("https://zentry.io");
-  const [email, setEmail] = useState(user?.email || "creador@zentry.app");
+  // Form States (cargados desde el perfil real del backend)
+  const [displayName, setDisplayName] = useState(user?.username || "");
+  const [bio, setBio] = useState("");
+  const email = user?.email || "";
 
-  // Privacy States
+  // Privacy States (reales, persistidos en el perfil del backend)
   const [isPrivate, setIsPrivate] = useState(false);
-  const [showStatus, setShowStatus] = useState(true);
-  const [allowDms, setAllowDms] = useState<'everyone' | 'following' | 'nobody'>('everyone');
+  const [showSavedPosts, setShowSavedPosts] = useState(true);
+  const [showLikedPosts, setShowLikedPosts] = useState(true);
 
-  // Notification States
+  // Notification States (preferencia local del dispositivo, no hay backend de notificaciones push aún)
   const [notifyLikes, setNotifyLikes] = useState(true);
   const [notifyComments, setNotifyComments] = useState(true);
   const [notifyMentions, setNotifyMentions] = useState(true);
   const [notifyEmail, setNotifyEmail] = useState(false);
 
   // Appearance
-  const [accentColor, setAccentColor] = useState('purple');
   const [autoplayMedia, setAutoplayMedia] = useState(true);
 
   // Passwords
   const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  useEffect(() => {
+    getMyProfileAction().then(res => {
+      if (res.success && res.data) {
+        const p = res.data;
+        setDisplayName(p.name || user?.username || "");
+        setBio(p.bio || "");
+        setIsPrivate(Boolean(p.isPrivate));
+        setShowSavedPosts(p.showSavedPosts !== false);
+        setShowLikedPosts(p.showLikedPosts !== false);
+      }
+      setIsLoadingProfile(false);
+    });
+    getUserStatsAction().then(res => {
+      if (res.success && res.data) setStats(res.data);
+    });
+
+    try {
+      const savedPrefs = JSON.parse(localStorage.getItem('zentry_notification_prefs') || '{}');
+      if (typeof savedPrefs.notifyLikes === 'boolean') setNotifyLikes(savedPrefs.notifyLikes);
+      if (typeof savedPrefs.notifyComments === 'boolean') setNotifyComments(savedPrefs.notifyComments);
+      if (typeof savedPrefs.notifyMentions === 'boolean') setNotifyMentions(savedPrefs.notifyMentions);
+      if (typeof savedPrefs.notifyEmail === 'boolean') setNotifyEmail(savedPrefs.notifyEmail);
+      const appearancePrefs = JSON.parse(localStorage.getItem('zentry_appearance_prefs') || '{}');
+      if (typeof appearancePrefs.autoplayMedia === 'boolean') setAutoplayMedia(appearancePrefs.autoplayMedia);
+    } catch { /* localStorage no disponible o corrupto: usar valores por defecto */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const persistNotificationPrefs = (next: Partial<{ notifyLikes: boolean; notifyComments: boolean; notifyMentions: boolean; notifyEmail: boolean }>) => {
+    try {
+      const current = { notifyLikes, notifyComments, notifyMentions, notifyEmail, ...next };
+      localStorage.setItem('zentry_notification_prefs', JSON.stringify(current));
+    } catch { /* ignore */ }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await updateProfile({ displayName, bio, website, email });
+    const res = await updateProfile({ displayName, bio, website: "", email });
     if (res.success) {
       toast.success("¡Perfil actualizado correctamente!");
-      updateUser({ name: displayName, bio, email });
+      updateUser({ name: displayName, bio });
     } else {
-      toast.error("Error al actualizar perfil.");
+      toast.error(res.message || "Error al actualizar perfil.");
+    }
+  };
+
+  const handleTogglePrivacy = async (field: 'isPrivate' | 'showSavedPosts' | 'showLikedPosts', value: boolean) => {
+    const prev = { isPrivate, showSavedPosts, showLikedPosts };
+    if (field === 'isPrivate') setIsPrivate(value);
+    if (field === 'showSavedPosts') setShowSavedPosts(value);
+    if (field === 'showLikedPosts') setShowLikedPosts(value);
+
+    setIsSavingPrivacy(true);
+    const res = await updatePrivacySettings({
+      isPrivate: field === 'isPrivate' ? value : isPrivate,
+      showSavedPosts: field === 'showSavedPosts' ? value : showSavedPosts,
+      showLikedPosts: field === 'showLikedPosts' ? value : showLikedPosts,
+    });
+    setIsSavingPrivacy(false);
+
+    if (!res.success) {
+      setIsPrivate(prev.isPrivate);
+      setShowSavedPosts(prev.showSavedPosts);
+      setShowLikedPosts(prev.showLikedPosts);
+      toast.error(res.message || "No se pudo actualizar tu privacidad");
+    } else {
+      toast.success("Preferencia de privacidad actualizada");
     }
   };
 
@@ -58,13 +124,19 @@ export default function SettingsClient() {
       toast.error("Por favor, completa los campos de contraseña.");
       return;
     }
+    if (newPass.length < 6) {
+      toast.error("La nueva contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    setIsSavingPassword(true);
     const res = await updateSecurity({ currentPass, newPass });
+    setIsSavingPassword(false);
     if (res.success) {
       toast.success("Contraseña cambiada con éxito.");
       setCurrentPass("");
       setNewPass("");
     } else {
-      toast.error("Error al cambiar contraseña.");
+      toast.error(res.message || "Error al cambiar contraseña.");
     }
   };
 
@@ -104,9 +176,12 @@ export default function SettingsClient() {
             { id: 'notifications', label: 'Notificaciones', icon: Bell },
             { id: 'appearance', label: 'Apariencia & Tema', icon: Palette },
             { id: 'account', label: 'Seguridad de Cuenta', icon: KeyRound },
+            { id: 'stats', label: 'Estadísticas', icon: BarChart3 },
+            { id: 'support', label: 'Soporte', icon: LifeBuoy },
+            { id: 'policies', label: 'Políticas', icon: FileText },
           ].map(tab => {
             const IconComp = tab.icon;
-            const tabId = tab.id as 'profile' | 'privacy' | 'notifications' | 'appearance' | 'account';
+            const tabId = tab.id as Tab;
             return (
               <button
                 key={tab.id}
@@ -134,51 +209,44 @@ export default function SettingsClient() {
                 <p className="text-xs text-zentry-text-2">Esta información se mostrará públicamente en tu tarjeta de creador.</p>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase">Nombre Visible</label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
-                  />
+              {isLoadingProfile ? (
+                <div className="flex items-center justify-center py-10 text-zentry-text-2 gap-2 text-xs">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando tu perfil...
                 </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase">Nombre Visible</label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase">Biografía del Creador</label>
-                  <textarea
-                    rows={3}
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    className="w-full bg-zentry-bg border border-zentry-border rounded-xl p-4 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent resize-none"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase">Biografía del Creador</label>
+                    <textarea
+                      rows={3}
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      className="w-full bg-zentry-bg border border-zentry-border rounded-xl p-4 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent resize-none"
+                    />
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase">Correo Electrónico</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase">Sitio Web / Portafolio</label>
-                    <input
-                      type="url"
-                      value={website}
-                      onChange={(e) => setWebsite(e.target.value)}
-                      className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
-                    />
+                    <div className="w-full bg-zentry-bg/60 border border-zentry-border rounded-xl px-4 py-3 text-xs text-zentry-text-2 flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 shrink-0" /> {email || "Sin correo registrado"}
+                    </div>
+                    <p className="text-[10px] text-zentry-text-2 mt-1">El correo de acceso no puede cambiarse desde aquí por seguridad.</p>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="pt-4 border-t border-zentry-border flex justify-end">
-                <button type="submit" className="px-6 py-3 bg-zentry-text-1 text-zentry-bg font-extrabold text-xs rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2">
+                <button type="submit" disabled={isLoadingProfile} className="px-6 py-3 bg-zentry-text-1 text-zentry-bg font-extrabold text-xs rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50">
                   <Save className="w-4 h-4" /> Guardar Cambios
                 </button>
               </div>
@@ -190,68 +258,59 @@ export default function SettingsClient() {
             <div className="space-y-6">
               <div className="border-b border-zentry-border pb-4">
                 <h2 className="text-lg font-extrabold text-zentry-text-1">Privacidad & Seguridad Social</h2>
-                <p className="text-xs text-zentry-text-2">Controla quién puede ver tus publicaciones e interactuar contigo.</p>
+                <p className="text-xs text-zentry-text-2">Controla quién puede ver tu perfil y tu actividad.</p>
               </div>
 
               <div className="space-y-5 text-xs">
                 {/* Perfil Privado */}
                 <div className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
                   <div>
-                    <h3 className="font-extrabold text-zentry-text-1 text-sm">Perfil Privado</h3>
-                    <p className="text-zentry-text-2 mt-0.5">Solo los usuarios que apruebes podrán ver tus publicaciones e historias.</p>
+                    <h3 className="font-extrabold text-zentry-text-1 text-sm">Cuenta Privada</h3>
+                    <p className="text-zentry-text-2 mt-0.5">Marca tu cuenta como privada. Tu perfil seguirá visible, pero se identificará como privado para otros creadores.</p>
                   </div>
                   <button
-                    onClick={() => {
-                      setIsPrivate(!isPrivate);
-                      toast.success(isPrivate ? "Perfil ahora es Público" : "Perfil cambiado a Privado");
-                    }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPrivate ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
+                    onClick={() => handleTogglePrivacy('isPrivate', !isPrivate)}
+                    disabled={isSavingPrivacy}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${isPrivate ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                {/* Estado en Línea */}
+                {/* Mostrar Guardados */}
                 <div className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
-                  <div>
-                    <h3 className="font-extrabold text-zentry-text-1 text-sm">Mostrar Estado En Línea </h3>
-                    <p className="text-zentry-text-2 mt-0.5">Permite que tus amigos vean el indicador verde cuando estés activo.</p>
+                  <div className="flex items-start gap-2">
+                    <Bookmark className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                    <div>
+                      <h3 className="font-extrabold text-zentry-text-1 text-sm">Mostrar mis Guardados</h3>
+                      <p className="text-zentry-text-2 mt-0.5">Permite que otros creadores vean tu colección de publicaciones guardadas en tu perfil.</p>
+                    </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setShowStatus(!showStatus);
-                      toast.info(showStatus ? "Estado oculta" : "Estado visible");
-                    }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showStatus ? 'bg-emerald-500' : 'bg-zentry-border'}`}
+                    onClick={() => handleTogglePrivacy('showSavedPosts', !showSavedPosts)}
+                    disabled={isSavingPrivacy}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${showSavedPosts ? 'bg-amber-500' : 'bg-zentry-border'}`}
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showStatus ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showSavedPosts ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
-                {/* Mensajes Directos */}
-                <div className="p-4 bg-zentry-bg border border-zentry-border rounded-2xl space-y-3">
-                  <h3 className="font-extrabold text-zentry-text-1 text-sm">¿Quién puede enviarte Mensajes Directos?</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { id: 'everyone', label: 'Cualquiera' },
-                      { id: 'following', label: 'Solo a quienes sigo' },
-                      { id: 'nobody', label: 'Nadie' },
-                    ].map(opt => {
-                      const optId = opt.id as 'everyone' | 'following' | 'nobody';
-                      return (
-                        <button
-                          key={opt.id}
-                          onClick={() => setAllowDms(optId)}
-                          className={`py-2.5 px-3 rounded-xl font-bold border text-center transition-all ${allowDms === opt.id
-                              ? 'border-zentry-accent bg-zentry-accent/10 text-zentry-accent'
-                              : 'border-zentry-border text-zentry-text-2 hover:text-zentry-text-1'
-                            }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
+                {/* Mostrar Me gusta */}
+                <div className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
+                  <div className="flex items-start gap-2">
+                    <Heart className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                    <div>
+                      <h3 className="font-extrabold text-zentry-text-1 text-sm">Mostrar mis Me Gusta</h3>
+                      <p className="text-zentry-text-2 mt-0.5">Permite que otros creadores vean las publicaciones que marcaste con me gusta.</p>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => handleTogglePrivacy('showLikedPosts', !showLikedPosts)}
+                    disabled={isSavingPrivacy}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${showLikedPosts ? 'bg-rose-500' : 'bg-zentry-border'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showLikedPosts ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -262,23 +321,27 @@ export default function SettingsClient() {
             <div className="space-y-6">
               <div className="border-b border-zentry-border pb-4">
                 <h2 className="text-lg font-extrabold text-zentry-text-1">Preferencias de Notificaciones</h2>
-                <p className="text-xs text-zentry-text-2">Configura las alertas que deseas recibir en tiempo real.</p>
+                <p className="text-xs text-zentry-text-2">Configura las alertas que deseas recibir en este dispositivo.</p>
               </div>
 
               <div className="space-y-4 text-xs">
                 {[
-                  { state: notifyLikes, setState: setNotifyLikes, title: 'Notificaciones de Me Gusta', desc: 'Recibe una alerta cuando alguien reaccione a tus obras' },
-                  { state: notifyComments, setState: setNotifyComments, title: 'Notificaciones de Comentarios', desc: 'Recibe una alerta cuando alguien comente tu publicación' },
-                  { state: notifyMentions, setState: setNotifyMentions, title: 'Menciones y Etiquetas', desc: 'Notificar cuando te mencionen en un post o comentario' },
-                  { state: notifyEmail, setState: setNotifyEmail, title: 'Resumen por Correo Electrónico', desc: 'Recibe un resumen semanal con las tendencias más destacadas' },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
+                  { key: 'notifyLikes' as const, state: notifyLikes, setState: setNotifyLikes, title: 'Notificaciones de Me Gusta', desc: 'Recibe una alerta cuando alguien reaccione a tus obras' },
+                  { key: 'notifyComments' as const, state: notifyComments, setState: setNotifyComments, title: 'Notificaciones de Comentarios', desc: 'Recibe una alerta cuando alguien comente tu publicación' },
+                  { key: 'notifyMentions' as const, state: notifyMentions, setState: setNotifyMentions, title: 'Menciones y Etiquetas', desc: 'Notificar cuando te mencionen en un post o comentario' },
+                  { key: 'notifyEmail' as const, state: notifyEmail, setState: setNotifyEmail, title: 'Resumen por Correo Electrónico', desc: 'Recibe un resumen semanal con las tendencias más destacadas' },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
                     <div>
                       <h3 className="font-extrabold text-zentry-text-1 text-sm">{item.title}</h3>
                       <p className="text-zentry-text-2 mt-0.5">{item.desc}</p>
                     </div>
                     <button
-                      onClick={() => item.setState(!item.state)}
+                      onClick={() => {
+                        const next = !item.state;
+                        item.setState(next);
+                        persistNotificationPrefs({ [item.key]: next });
+                      }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${item.state ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.state ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -294,7 +357,7 @@ export default function SettingsClient() {
             <div className="space-y-6">
               <div className="border-b border-zentry-border pb-4">
                 <h2 className="text-lg font-extrabold text-zentry-text-1">Apariencia & Personalización</h2>
-                <p className="text-xs text-zentry-text-2">Ajusta el tema visual y colores de acento de tu interfaz.</p>
+                <p className="text-xs text-zentry-text-2">Ajusta el tema visual de tu interfaz.</p>
               </div>
 
               <div className="space-y-5 text-xs">
@@ -323,10 +386,14 @@ export default function SettingsClient() {
                 <div className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
                   <div>
                     <h3 className="font-extrabold text-zentry-text-1 text-sm">Reproducción Automática de Videos</h3>
-                    <p className="text-zentry-text-2 mt-0.5">Reproducir automáticamenet los videos al desplazar el feed.</p>
+                    <p className="text-zentry-text-2 mt-0.5">Reproducir automáticamente los videos al desplazar el feed.</p>
                   </div>
                   <button
-                    onClick={() => setAutoplayMedia(!autoplayMedia)}
+                    onClick={() => {
+                      const next = !autoplayMedia;
+                      setAutoplayMedia(next);
+                      try { localStorage.setItem('zentry_appearance_prefs', JSON.stringify({ autoplayMedia: next })); } catch { /* ignore */ }
+                    }}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoplayMedia ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoplayMedia ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -369,11 +436,124 @@ export default function SettingsClient() {
               </div>
 
               <div className="pt-4 border-t border-zentry-border flex justify-end">
-                <button type="submit" className="px-6 py-3 bg-zentry-text-1 text-zentry-bg font-extrabold text-xs rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2">
-                  <KeyRound className="w-4 h-4" /> Actualizar Contraseña
+                <button type="submit" disabled={isSavingPassword} className="px-6 py-3 bg-zentry-text-1 text-zentry-bg font-extrabold text-xs rounded-xl hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50">
+                  {isSavingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />} Actualizar Contraseña
                 </button>
               </div>
             </form>
+          )}
+
+          {/* TAB 6: ESTADÍSTICAS */}
+          {activeTab === 'stats' && (
+            <div className="space-y-6">
+              <div className="border-b border-zentry-border pb-4">
+                <h2 className="text-lg font-extrabold text-zentry-text-1">Tus Estadísticas</h2>
+                <p className="text-xs text-zentry-text-2">Un vistazo rápido a tu actividad real en Zentry.</p>
+              </div>
+
+              {!stats ? (
+                <div className="flex items-center justify-center py-10 text-zentry-text-2 gap-2 text-xs">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando estadísticas...
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                  {[
+                    { label: 'Obras publicadas', value: stats.posts_count },
+                    { label: 'Seguidores', value: stats.followers_count },
+                    { label: 'Siguiendo', value: stats.following_count },
+                    { label: 'Amigos', value: stats.friends_count },
+                    { label: 'Zentry Coins', value: `${stats.zentry_coins} ZC` },
+                    { label: 'Reputación', value: stats.reputation_score },
+                    { label: 'Rango actual', value: stats.rank },
+                  ].map(item => (
+                    <div key={item.label} className="p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
+                      <p className="text-[10px] uppercase font-black tracking-wider text-zentry-text-2">{item.label}</p>
+                      <p className="text-lg font-black text-zentry-text-1 mt-1">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 7: SOPORTE */}
+          {activeTab === 'support' && (
+            <div className="space-y-6">
+              <div className="border-b border-zentry-border pb-4">
+                <h2 className="text-lg font-extrabold text-zentry-text-1">Centro de Soporte</h2>
+                <p className="text-xs text-zentry-text-2">¿Necesitas ayuda? Escríbenos y te responderemos lo antes posible.</p>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <a
+                  href="mailto:soporte@zentry.com"
+                  className="flex items-center gap-3 p-4 bg-zentry-bg border border-zentry-border rounded-2xl hover:border-zentry-accent transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-zentry-accent/15 text-zentry-accent flex items-center justify-center shrink-0">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-extrabold text-zentry-text-1 text-sm">Escríbenos por correo</h3>
+                    <p className="text-zentry-text-2 mt-0.5">soporte@zentry.com</p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-zentry-text-2 shrink-0" />
+                </a>
+
+                <div className="p-4 bg-zentry-bg border border-zentry-border rounded-2xl space-y-3">
+                  <h3 className="font-extrabold text-zentry-text-1 text-sm">Preguntas frecuentes</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-bold text-zentry-text-1">¿Cómo elimino mi cuenta?</p>
+                      <p className="text-zentry-text-2 mt-0.5">Escríbenos a soporte@zentry.com desde el correo registrado y procesaremos la solicitud en un plazo de 48 horas.</p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-zentry-text-1">¿Cómo reporto contenido inapropiado?</p>
+                      <p className="text-zentry-text-2 mt-0.5">Usa el botón de opciones (•••) en cualquier publicación o comunidad y selecciona &quot;Reportar&quot;.</p>
+                    </div>
+                    <div>
+                      <p className="font-bold text-zentry-text-1">¿Cómo funcionan los Zentry Coins?</p>
+                      <p className="text-zentry-text-2 mt-0.5">Se ganan completando misiones diarias y logros, y se usan en la Tienda para desbloquear artículos cosméticos.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: POLÍTICAS */}
+          {activeTab === 'policies' && (
+            <div className="space-y-6">
+              <div className="border-b border-zentry-border pb-4">
+                <h2 className="text-lg font-extrabold text-zentry-text-1">Políticas de Zentry</h2>
+                <p className="text-xs text-zentry-text-2">Revisa los términos y la política de privacidad de la plataforma.</p>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <Link
+                  href="/terms"
+                  className="flex items-center gap-3 p-4 bg-zentry-bg border border-zentry-border rounded-2xl hover:border-zentry-accent transition-colors"
+                >
+                  <FileText className="w-5 h-5 text-zentry-accent shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="font-extrabold text-zentry-text-1 text-sm">Términos y Condiciones</h3>
+                    <p className="text-zentry-text-2 mt-0.5">Reglas de uso de la plataforma Zentry.</p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-zentry-text-2 shrink-0" />
+                </Link>
+
+                <Link
+                  href="/privacy"
+                  className="flex items-center gap-3 p-4 bg-zentry-bg border border-zentry-border rounded-2xl hover:border-zentry-accent transition-colors"
+                >
+                  <Shield className="w-5 h-5 text-zentry-accent shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="font-extrabold text-zentry-text-1 text-sm">Política de Privacidad</h3>
+                    <p className="text-zentry-text-2 mt-0.5">Cómo protegemos y usamos tus datos.</p>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-zentry-text-2 shrink-0" />
+                </Link>
+              </div>
+            </div>
           )}
 
         </div>

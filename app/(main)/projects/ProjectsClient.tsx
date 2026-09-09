@@ -22,7 +22,7 @@ const CATEGORIES = ['UI/UX', 'Arte Digital', 'Desarrollo', 'Animación 3D', 'Bra
 
 export default function ProjectsClient({ initialProjects }: { initialProjects: Project[] | null }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const [projects, setProjects] = useState<Project[]>(initialProjects || []);
 
@@ -44,7 +44,6 @@ export default function ProjectsClient({ initialProjects }: { initialProjects: P
   // Estadísticas Rápidas
   const totalProjects = projects.length;
   const activeProjects = projects.filter(p => p.status === 'active').length;
-  const completedProjects = projects.filter(p => p.status === 'completed').length;
   const totalTasks = projects.reduce((acc, p) => acc + (p.tasksCount || 0), 0);
   const totalCompletedTasks = projects.reduce((acc, p) => acc + (p.completedTasksCount || 0), 0);
   const overallProgress = totalTasks > 0 ? Math.round((totalCompletedTasks / totalTasks) * 100) : 0;

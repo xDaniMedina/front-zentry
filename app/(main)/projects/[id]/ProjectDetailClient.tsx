@@ -20,6 +20,7 @@ import {
   inviteProjectMemberAction,
   removeProjectMemberAction,
 } from "@/lib/actions/projects";
+import { getImageUrl } from "@/lib/utils";
 import { Project, ProjectTask, ProjectPriority } from "@/types";
 
 export type ProjectResource = {
@@ -64,10 +65,10 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
   // Tab Activa
   const [activeTab, setActiveTab] = useState<'tasks' | 'resources' | 'history' | 'team' | 'notes'>('tasks');
 
-  // Datos del Proyecto
-  const [projectTitle, setProjectTitle] = useState(initialProject?.title || initialProject?.name || `Proyecto #${projectId}`);
-  const [projectDesc, setProjectDesc] = useState(initialProject?.description || "Iniciativa colaborativa en la red creativa Zentry.");
-  const [projectStatus, setProjectStatus] = useState<'active' | 'completed' | 'paused'>(initialProject?.status || 'active');
+  // Datos del Proyecto (no hay flujo de edición de título/descripción/estado todavía)
+  const projectTitle = initialProject?.title || initialProject?.name || `Proyecto #${projectId}`;
+  const projectDesc = initialProject?.description || "Iniciativa colaborativa en la red creativa Zentry.";
+  const projectStatus: 'active' | 'completed' | 'paused' = initialProject?.status || 'active';
   const [likesCount, setLikesCount] = useState(initialProject?.likesCount || 0);
   const [isLiked, setIsLiked] = useState(initialProject?.isLiked || false);
 
@@ -246,11 +247,8 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-
     startTransition(async () => {
-      const res = await addResourceAction(projectId, { name: file.name, type: ext, size: sizeMB });
+      const res = await addResourceAction(projectId, { name: file.name, file });
       if (res.success && res.data) {
         setResources(prev => [{
           id: String(res.data.id),
@@ -261,9 +259,9 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
           date: res.data.uploadedAt,
           url: res.data.url,
         }, ...prev]);
-        toast.success(`Archivo "${file.name}" registrado en el proyecto 📁`);
+        toast.success(`Archivo "${file.name}" subido al proyecto 📁`);
       } else {
-        toast.error("No se pudo registrar el archivo");
+        toast.error(res.error || "No se pudo subir el archivo");
       }
     });
   };
@@ -625,13 +623,21 @@ export default function ProjectDetailClient({ projectId, initialProject }: Proje
                   <div className="w-10 h-10 rounded-xl bg-zentry-accent/15 border border-zentry-accent/30 text-zentry-accent flex items-center justify-center font-mono font-black text-xs shrink-0">
                     {res.type}
                   </div>
-                  <button 
-                    onClick={() => toast.success(`Descargando "${res.name}"...`)}
-                    className="p-1.5 rounded-lg text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg"
-                    title="Descargar archivo"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
+                  {res.url ? (
+                    <a
+                      href={getImageUrl(res.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 rounded-lg text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg"
+                      title="Abrir archivo"
+                    >
+                      <Download className="w-4 h-4" />
+                    </a>
+                  ) : (
+                    <span className="p-1.5 rounded-lg text-zentry-text-2/30" title="Sin archivo adjunto (solo enlace/metadatos)">
+                      <Download className="w-4 h-4" />
+                    </span>
+                  )}
                 </div>
 
                 <div>

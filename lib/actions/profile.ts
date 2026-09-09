@@ -27,6 +27,19 @@ export async function updateProfileAction(formData: FormData) {
   }
 }
 
+export async function getMyProfileAction() {
+  try {
+    const res = await fetchAPI('/api/core/profiles/me')
+    if (!res) {
+      return { success: false as const }
+    }
+    return { success: true as const, data: res }
+  } catch (error) {
+    console.error('Error al obtener mi perfil:', error)
+    return { success: false as const }
+  }
+}
+
 export async function followUserAction(targetUsername: string) {
   try {
     const res = await fetchAPI(`/api/core/profiles/${targetUsername}/follow`, {

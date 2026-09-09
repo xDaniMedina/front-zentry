@@ -9,6 +9,7 @@ import {
 import { toast } from "sonner"
 import Link from "next/link"
 import { getImageUrl, getInitials, timeAgo } from "@/lib/utils"
+import { toggleBookmarkAction } from "@/lib/actions/feed"
 import Image from "next/image"
 
 export type CommentItem = {
@@ -36,13 +37,13 @@ export type PostType = {
   tags?: string[];
   comments_list?: CommentItem[];
   liked?: boolean;
+  saved?: boolean;
   height?: string;
   color?: string;
 };
 
 interface FeedCardProps {
   post: PostType;
-  currentUsername?: string;
   isLiked?: boolean;
   onLike: (postId: string | number) => void;
   onComment?: (post: PostType) => void;
@@ -50,17 +51,16 @@ interface FeedCardProps {
   isListMode?: boolean;
 }
 
-export function FeedCard({ 
-  post, 
-  currentUsername = 'creador', 
-  isLiked = false, 
-  onLike, 
-  onComment, 
+export function FeedCard({
+  post,
+  isLiked = false,
+  onLike,
+  onComment,
   onShare, 
   isListMode 
 }: FeedCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [isSaved, setIsSaved] = useState(Boolean(post.saved));
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const [isFullscreenImage, setIsFullscreenImage] = useState(false);
 
@@ -78,39 +78,23 @@ export function FeedCard({
   const rawHandle = post.handle || '@creador';
   const cleanUsername = rawHandle.replace(/^@/, '');
 
-  // Cargar estado de guardado
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedKey = `zentry_saved_posts_${currentUsername.toLowerCase()}`;
-        const savedList = JSON.parse(localStorage.getItem(savedKey) || '[]');
-        if (Array.isArray(savedList) && savedList.includes(String(post.id))) {
-          setIsSaved(true);
-        }
-      } catch {}
-    }
-  }, [post.id, currentUsername]);
+    setIsSaved(Boolean(post.saved));
+  }, [post.id, post.saved]);
 
-  // Manejo de Guardar en Perfil (TikTok / Instagram style)
-  const handleToggleSave = () => {
+  // Manejo de Guardar en Perfil (TikTok / Instagram style) — persistido en el backend
+  const handleToggleSave = async () => {
+    const previousState = isSaved;
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
 
-    if (typeof window !== 'undefined') {
-      try {
-        const savedKey = `zentry_saved_posts_${currentUsername.toLowerCase()}`;
-        let savedList: string[] = JSON.parse(localStorage.getItem(savedKey) || '[]');
-        const pIdStr = String(post.id);
-
-        if (nextSaved) {
-          if (!savedList.includes(pIdStr)) savedList.push(pIdStr);
-          toast.success("🔖 Publicación guardada en tu perfil");
-        } else {
-          savedList = savedList.filter(id => id !== pIdStr);
-          toast.info("Publicación eliminada de guardados");
-        }
-        localStorage.setItem(savedKey, JSON.stringify(savedList));
-      } catch {}
+    const res = await toggleBookmarkAction(post.id);
+    if (res.success) {
+      setIsSaved(Boolean(res.saved));
+      toast.success(res.saved ? "🔖 Publicación guardada en tu perfil" : "Publicación eliminada de guardados");
+    } else {
+      setIsSaved(previousState);
+      toast.error(res.error || "No se pudo actualizar tus guardados");
     }
   };
 

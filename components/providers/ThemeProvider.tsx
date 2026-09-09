@@ -31,7 +31,6 @@ export function ThemeProvider({
   children,
   defaultTheme = "dark",
   storageKey = "zentry-theme",
-  attribute = "class",
   themes = ["dark", "light", "theme-special", "zentry"],
 }: ThemeProviderProps) {
   const [theme, setThemeState] = React.useState<string>(() => {

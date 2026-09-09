@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import {
   Wand2, Plus, FileEdit, FolderOpen, Image as ImageIcon, Video, Music, Coins, X, UploadCloud, CheckCircle2,
-  FileText, Search, Trash2, Loader2, Sparkles, Grid
+  FileText, Search, Trash2, Loader2, Sparkles, Grid, Send, FileStack
 } from "lucide-react";
 import { toast } from "sonner";
 import { StudioProject } from "@/types";
-import { saveStudioProjectAction, deleteStudioProjectAction } from "@/lib/actions/studio";
+import { createStudioProjectAction, deleteStudioProjectAction, publishStudioProjectAction } from "@/lib/actions/studio";
 
 export type ContentType = 'canvas' | 'document' | 'image' | 'video' | 'audio';
 
@@ -21,12 +21,14 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
   const router = useRouter();
 
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'published'>('all');
   const [searchQuery, setSearchQuery] = useState("");
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -59,43 +61,27 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
     const titleVal = newTitle.trim();
     const typeVal = selectedType;
     const descVal = newDesc.trim();
-    const rewardValue = contentOptions.find(c => c.id === selectedType)?.reward || 50;
 
-    resetModal();
     setIsSubmitting(true);
 
-    try {
-      const res = await saveStudioProjectAction({
-        title: titleVal,
-        type: typeVal,
-        content: descVal,
-        metadata: { reward: rewardValue }
-      });
+    const res = await createStudioProjectAction({
+      title: titleVal,
+      type: typeVal,
+      description: descVal,
+      file: uploadFile,
+      rewardCoins: contentOptions.find(c => c.id === selectedType)?.reward || 50,
+    });
 
-      if (res.success && res.data?.id) {
-        const createdId = String(res.data.id);
-        const createdProject: StudioProject = {
-          id: createdId,
-          title: res.data.title || titleVal,
-          type: res.data.contentType || res.data.content_type || typeVal,
-          lastEdited: 'Justo ahora',
-          reward: rewardValue,
-          content: res.data.contenido || res.data.content || descVal
-        };
+    setIsSubmitting(false);
 
-        setFiles(prev => [createdProject, ...prev.filter(p => p.id !== createdId)]);
-        toast.success(`¡Proyecto "${titleVal}" creado con éxito!`);
-        router.push(`/studio/${createdId}?type=${typeVal}&title=${encodeURIComponent(titleVal)}`);
-      } else {
-        const tempId = `temp-${Date.now()}`;
-        router.push(`/studio/${tempId}?type=${typeVal}&title=${encodeURIComponent(titleVal)}`);
-      }
-    } catch (error) {
-      console.warn("Creación fallback:", error);
-      const tempId = `temp-${Date.now()}`;
-      router.push(`/studio/${tempId}?type=${typeVal}&title=${encodeURIComponent(titleVal)}`);
-    } finally {
-      setIsSubmitting(false);
+    if (res.success && res.data) {
+      const createdProject = res.data;
+      resetModal();
+      setFiles(prev => [createdProject, ...prev.filter(p => p.id !== createdProject.id)]);
+      toast.success(`¡Proyecto "${titleVal}" creado con éxito!`);
+      router.push(`/studio/${createdProject.id}`);
+    } else {
+      toast.error(res.error || "No se pudo crear el proyecto");
     }
   };
 
@@ -149,8 +135,25 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
   const filteredFiles = files.filter(file => {
     const matchesFilter = filterType === 'all' || file.type === filterType;
     const matchesSearch = file.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
+    const matchesStatus = filterStatus === 'all'
+      || (filterStatus === 'draft' && !file.published)
+      || (filterStatus === 'published' && file.published);
+    return matchesFilter && matchesSearch && matchesStatus;
   });
+
+  const handlePublishProject = async (e: React.MouseEvent, id: string, title: string) => {
+    e.stopPropagation();
+    setPublishingId(id);
+    const res = await publishStudioProjectAction(id);
+    setPublishingId(null);
+
+    if (res.success && res.data) {
+      setFiles(prev => prev.map(p => p.id === id ? res.data! : p));
+      toast.success(`"${title}" se publicó en el feed 🎉`);
+    } else {
+      toast.error(res.error || "No se pudo publicar el proyecto");
+    }
+  };
 
   return (
     <div className="w-full space-y-8 pb-20 mt-2 sm:mt-4">
@@ -180,6 +183,30 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
             Nuevo Proyecto
           </button>
         </div>
+      </div>
+
+      {/* Pestañas de Estado: Todos / Borradores / Publicados */}
+      <div className="flex items-center gap-2">
+        {[
+          { id: 'all' as const, label: 'Todos', icon: FolderOpen },
+          { id: 'draft' as const, label: 'Borradores', icon: FileStack, count: files.filter(f => !f.published).length },
+          { id: 'published' as const, label: 'Publicados', icon: Send, count: files.filter(f => f.published).length },
+        ].map(tab => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setFilterStatus(tab.id)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${filterStatus === tab.id
+                ? 'bg-zentry-text-1 text-zentry-bg shadow-md'
+                : 'bg-zentry-card border border-zentry-border text-zentry-text-2 hover:text-zentry-text-1'
+                }`}
+            >
+              <Icon className="w-3.5 h-3.5" /> {tab.label}
+              {typeof tab.count === 'number' && <span className="text-[10px] opacity-70">({tab.count})</span>}
+            </button>
+          );
+        })}
       </div>
 
       {/* Barra de Filtros y Búsqueda */}
@@ -273,9 +300,16 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                 </div>
 
                 <div className="space-y-1">
-                  <h4 className="font-black text-sm text-zentry-text-1 truncate group-hover:text-zentry-accent transition-colors">
-                    {file.title}
-                  </h4>
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="font-black text-sm text-zentry-text-1 truncate group-hover:text-zentry-accent transition-colors">
+                      {file.title}
+                    </h4>
+                    {file.published ? (
+                      <span className="shrink-0 text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/20">Publicado</span>
+                    ) : (
+                      <span className="shrink-0 text-[9px] font-black text-zinc-400 bg-zinc-500/10 px-1.5 py-0.5 rounded-full border border-zinc-500/20">Borrador</span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-zentry-text-2">
                     Editado: <span className="font-semibold text-zentry-text-1">{file.lastEdited}</span>
                   </p>
@@ -283,7 +317,18 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
 
                 <div className="pt-2 border-t border-zentry-border flex items-center justify-between text-[11px] font-bold text-zentry-text-2">
                   <span className="capitalize">{file.type}</span>
-                  <span className="text-zentry-accent group-hover:translate-x-1 transition-transform">Abrir →</span>
+                  {file.published ? (
+                    <span className="text-zentry-accent group-hover:translate-x-1 transition-transform">Abrir →</span>
+                  ) : (
+                    <button
+                      onClick={(e) => handlePublishProject(e, file.id, file.title)}
+                      disabled={publishingId === file.id}
+                      className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
+                      title="Publicar en el feed"
+                    >
+                      {publishingId === file.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Publicar
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )

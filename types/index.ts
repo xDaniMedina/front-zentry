@@ -114,13 +114,16 @@ export interface Follower {
 export interface Notification {
   id: string | number
   user_id?: string
-  type: 'like' | 'comment' | 'follow' | 'reward' | 'system'
+  type: 'like' | 'comment' | 'follow' | 'friend_request' | 'friend_accept' | 'reward' | 'system'
   content?: string
   text?: string
   read: boolean
   time?: string
   created_at?: string
   link_url?: string
+  sourceUsername?: string
+  sourceAvatarUrl?: string
+  relatedId?: number
 }
 
 // Espeja MessageResponse del backend (zentry.back.api.realtime.dtos.MessageResponse)
@@ -156,11 +159,19 @@ export interface Conversation {
 
 export interface Transaction {
   id: string
-  user_id: string 
+  user_id: string
   amount: number
   type: 'credit' | 'debit'
   description: string
   created_at: string
+}
+
+export interface WalletTransaction {
+  id: string
+  type: 'ingreso' | 'egreso' | 'recarga'
+  amount: number
+  description: string
+  date: string
 }
 
 export interface Subscription {
@@ -253,6 +264,8 @@ export interface StudioProject {
    
   metadata?: Record<string, any>
   created_at?: string
+  published?: boolean
+  postId?: number | null
 }
 
 export type ProjectPriority = 'baja' | 'media' | 'alta' | 'urgente';

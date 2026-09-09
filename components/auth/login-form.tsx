@@ -41,8 +41,8 @@ export function LoginForm() {
     formData.append('password', data.password)
     try {
       // Llamamos Server Action
-      await login(formData) 
-    } catch (error) {
+      await login(formData)
+    } catch {
       setServerError("Credenciales incorrectas o error de servidor.")
     }
   }

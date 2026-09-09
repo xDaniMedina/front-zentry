@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { 
-  X, Pause, Play, Heart, Send, 
+import {
+  X, Pause, Play, Heart, Send,
   ChevronLeft, ChevronRight, Music, Share2,
-  MoreHorizontal, Trash2
+  MoreHorizontal, Trash2, Volume2, VolumeX
 } from "lucide-react"
 import { getInitials, getImageUrl, cn } from "@/lib/utils"
 import { UserStoryGroup, StoryItem } from "@/types/stories"
@@ -48,7 +48,9 @@ export default function StoryViewer({
   const [currentItemIdx, setCurrentItemIdx] = useState(initialItemIndex);
   const [isPaused, setIsPaused] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  // Silenciado por defecto: los navegadores bloquean el autoplay con sonido si el
+  // usuario aún no interactuó con el sitio; el botón de abajo permite activarlo.
+  const [isMuted, setIsMuted] = useState(true);
   const [progress, setProgress] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [particles, setParticles] = useState<Particle[]>([]);
@@ -337,7 +339,17 @@ export default function StoryViewer({
                 {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
               </button>
 
-              <button 
+              {currentStory.type === 'video' && (
+                <button
+                  onClick={() => setIsMuted(prev => !prev)}
+                  className="p-1.5 rounded-full bg-black/40 hover:bg-black/60 text-white/90 hover:text-white transition-colors"
+                  title={isMuted ? "Activar sonido" : "Silenciar"}
+                >
+                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+              )}
+
+              <button
                 onClick={handleShare}
                 className="p-1.5 rounded-full bg-black/40 hover:bg-black/60 text-white/90 hover:text-white transition-colors"
                 title="Compartir historia"

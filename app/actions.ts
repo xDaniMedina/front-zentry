@@ -24,7 +24,7 @@ export async function obtenerDatosSeguros(endpoint: string){
         const data = await response.json();
         return {error: null, data};
 
-    } catch (error) {
+    } catch {
         return {error: `Error, No es posible obtener datos`, data: null};
     }
 }

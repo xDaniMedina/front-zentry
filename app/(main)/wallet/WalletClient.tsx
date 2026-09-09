@@ -7,17 +7,9 @@ import {
   Zap, X, CheckCircle2, Crown, Check, CreditCard, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
 import { subscribeToPlanAction, sendCoinsAction, topupCoinsAction, getWalletBalance } from "@/lib/actions/wallet";
+import type { WalletTransaction } from "@/types";
 import useSWR from "swr";
-
-export type WalletTransaction = { 
-  id: string; 
-  type: 'ingreso' | 'egreso' | 'recarga'; 
-  amount: number; 
-  description: string; 
-  date: string; 
-}
 
 export type SubscriptionPlan = {
   id: string;
@@ -38,16 +30,13 @@ export type WalletData = {
   transactions: WalletTransaction[]; 
 }
 
-const FALLBACK_WALLET: WalletData = {
-  balance: 1250.50,
-  activePlanId: 'pro',
-  nextBillingDate: '15 de Septiembre, 2026',
-  transactions: [
-    { id: 't1', type: 'recarga', amount: 500, description: 'Recarga de Zentry Coins', date: 'Hoy, 10:30 AM' },
-    { id: 't2', type: 'egreso', amount: 15, description: 'Suscripción Zentry PRO (Mensual)', date: 'Ayer, 14:00 PM' },
-    { id: 't3', type: 'ingreso', amount: 350, description: 'Venta de Obra: Raíces Cyberpunk', date: 'Hace 3 días' },
-    { id: 't4', type: 'egreso', amount: 45, description: 'Remezcla de Arte 3D', date: 'Hace 1 semana' },
-  ]
+// Estado real vacío: se usa solo si la carga inicial del backend falla, nunca
+// datos inventados que pudieran confundirse con saldo o movimientos reales.
+const EMPTY_WALLET: WalletData = {
+  balance: 0,
+  activePlanId: 'free',
+  nextBillingDate: '—',
+  transactions: []
 };
 
 const PLANS: SubscriptionPlan[] = [
@@ -105,22 +94,25 @@ const PLANS: SubscriptionPlan[] = [
 const containerVariants: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }
 
 export default function WalletClient({ initialData }: { initialData: WalletData | null }) {
-  const { user } = useAuth();
-  
+
   const { data: swrRes } = useSWR(
     'walletBalance',
     async () => await getWalletBalance(),
     { refreshInterval: 15000 }
   );
 
-  const [data, setData] = useState<WalletData>(initialData || FALLBACK_WALLET);
+  const [data, setData] = useState<WalletData>(initialData || EMPTY_WALLET);
 
   useEffect(() => {
     if (swrRes && swrRes.success) {
       setData(prev => ({
         ...prev,
         balance: swrRes.coins ?? prev.balance,
-        transactions: (swrRes.transactions && swrRes.transactions.length > 0) ? (swrRes.transactions as unknown as WalletTransaction[]) : prev.transactions,
+        activePlanId: swrRes.planId ?? prev.activePlanId,
+        nextBillingDate: swrRes.nextBillingDate ?? prev.nextBillingDate,
+        // Los movimientos reales sí pueden ser una lista vacía (usuario nuevo sin actividad);
+        // solo se conserva la lista previa si esta actualización no trajo datos.
+        transactions: swrRes.transactions ?? prev.transactions,
       }));
     }
   }, [swrRes]);
@@ -318,7 +310,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
         toast.error("Error al recargar saldo. Intenta de nuevo.");
         setPaymentStep('details');
       }
-    } catch (e) {
+    } catch {
       toast.error("Ocurrió un error en el servidor.");
       setPaymentStep('details');
     }

@@ -47,7 +47,7 @@ export function FeedSearch({
       try {
         const result = await searchProfilesAction(query);
         setResults(result.success ? result.data : []);
-      } catch (error) {
+      } catch {
         setResults([]);
       } finally {
         setIsSearching(false);

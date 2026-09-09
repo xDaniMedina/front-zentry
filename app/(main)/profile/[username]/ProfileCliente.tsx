@@ -16,6 +16,10 @@ import { AchievementItem } from "@/lib/gamification";
 import { fetchAchievements } from "@/lib/actions/gamification";
 import { followUserAction, updateProfileAction, updateProfileWithFilesAction } from "@/lib/actions/profile";
 import FollowsModal from "@/components/feed/FollowsModal";
+import { getImageUrl } from "@/lib/utils";
+import { getPostsByUsernameAction, getSavedPostsAction, getLikedPostsAction } from "@/lib/actions/feed";
+import type { PostType } from "@/components/feed/FeedCard";
+import ShareProfileModal from "@/components/profile/ShareProfileModal";
 
 export type ProfileData = {
   username: string;
@@ -80,38 +84,25 @@ export default function ProfileClient({ initialData, username }: { initialData: 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
 
-  // Estados Dinámicos de Publicaciones
-  const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
-  const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
+  // Estados Dinámicos de Publicaciones (100% backend, respetando privacidad)
+  const [ownPosts, setOwnPosts] = useState<PostType[]>([]);
+  const [savedPosts, setSavedPosts] = useState<PostType[]>([]);
+  const [savedHidden, setSavedHidden] = useState(false);
+  const [likedPosts, setLikedPosts] = useState<PostType[]>([]);
+  const [likedHidden, setLikedHidden] = useState(false);
 
-  // Cargar Posts desde el Motor de Publicaciones
   useEffect(() => {
-    async function loadProfilePosts() {
-      try {
-        const res = await fetch('/api/posts');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            setAllPosts(data.data);
-          }
-        }
-      } catch {}
-    }
-
-    loadProfilePosts();
-
-    if (typeof window !== 'undefined') {
-      try {
-        const savedKey = `zentry_saved_posts_${decodedUsername.toLowerCase()}`;
-        const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
-        if (Array.isArray(saved)) setSavedPostIds(saved);
-
-        const likedKey = `zentry_liked_posts_${decodedUsername.toLowerCase()}`;
-        const liked = JSON.parse(localStorage.getItem(likedKey) || '[]');
-        if (Array.isArray(liked)) setLikedPostIds(liked);
-      } catch {}
-    }
+    getPostsByUsernameAction(decodedUsername).then(res => {
+      if (res.success) setOwnPosts(res.data);
+    });
+    getSavedPostsAction(decodedUsername).then(res => {
+      setSavedPosts(res.data);
+      setSavedHidden(Boolean(res.hidden));
+    });
+    getLikedPostsAction(decodedUsername).then(res => {
+      setLikedPosts(res.data);
+      setLikedHidden(Boolean(res.hidden));
+    });
   }, [decodedUsername]);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -198,70 +189,84 @@ export default function ProfileClient({ initialData, username }: { initialData: 
     try {
       const hasFiles = Boolean(avatarFile || bannerFile);
 
-      // Actualización local garantizada en AuthContext y LocalStorage
-      const newAvatarUrl = profile.avatarUrl || "";
-      const newBannerUrl = profile.bannerUrl || "";
+      const formData = new FormData();
+      formData.append('name', editForm.name);
+      formData.append('discipline', editForm.discipline);
+      formData.append('location', editForm.location);
+      formData.append('bio', editForm.bio);
+      if (avatarFile) formData.append('avatar', avatarFile);
+      if (bannerFile) formData.append('banner', bannerFile);
 
+      const result = hasFiles
+        ? await updateProfileWithFilesAction(formData)
+        : await updateProfileAction(formData);
+
+      if (!result.success || !result.data) {
+        toast.error(result.message || "No se pudo actualizar el perfil");
+        return;
+      }
+
+      // Solo tras confirmar el backend usamos las URLs reales (nunca la vista previa base64 local)
+      const data = result.data;
       updateUser({
-        name: editForm.name,
-        discipline: editForm.discipline,
-        bio: editForm.bio,
-        location: editForm.location,
-        avatar_url: newAvatarUrl,
-        banner_url: newBannerUrl
+        name: data.name ?? editForm.name,
+        discipline: data.discipline ?? editForm.discipline,
+        bio: data.bio ?? editForm.bio,
+        location: data.location ?? editForm.location,
+        avatar_url: data.avatarUrl ?? profile.avatarUrl,
+        banner_url: data.bannerUrl ?? profile.bannerUrl,
       });
 
       setProfile(prev => ({
         ...prev,
-        name: editForm.name,
-        discipline: editForm.discipline,
-        location: editForm.location,
-        bio: editForm.bio
+        name: data.name ?? editForm.name,
+        discipline: data.discipline ?? editForm.discipline,
+        location: data.location ?? editForm.location,
+        bio: data.bio ?? editForm.bio,
+        avatarUrl: data.avatarUrl ?? prev.avatarUrl,
+        bannerUrl: data.bannerUrl ?? prev.bannerUrl,
       }));
 
       setIsEditModalOpen(false);
       setAvatarFile(null);
       setBannerFile(null);
-      toast.success("Foto de perfil y datos actualizados correctamente ✨");
-
-      // Notificar al backend
-      if (hasFiles) {
-        const formData = new FormData();
-        formData.append('name', editForm.name);
-        formData.append('discipline', editForm.discipline);
-        formData.append('location', editForm.location);
-        formData.append('bio', editForm.bio);
-
-        if (avatarFile) formData.append('avatar', avatarFile);
-        if (bannerFile) formData.append('banner', bannerFile);
-
-        await updateProfileWithFilesAction(formData).catch(err => console.warn("Backend no guardó copia remota:", err));
-      } else {
-        const formData = new FormData();
-        formData.append('name', editForm.name);
-        formData.append('discipline', editForm.discipline);
-        formData.append('location', editForm.location);
-        formData.append('bio', editForm.bio);
-
-        await updateProfileAction(formData).catch(err => console.warn("Backend no guardó copia remota:", err));
-      }
+      toast.success("Perfil actualizado correctamente ✨");
     } catch (error) {
       console.error("Error al actualizar el perfil:", error);
-      toast.success("Cambios guardados localmente ✨");
+      toast.error("Error de conexión al actualizar el perfil");
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleCancelEdit = () => {
+    setAvatarFile(null);
+    setBannerFile(null);
+    setProfile(prev => ({
+      ...prev,
+      avatarUrl: avatarFile ? (initialData?.avatarUrl || "") : prev.avatarUrl,
+      bannerUrl: bannerFile ? (initialData?.bannerUrl || "") : prev.bannerUrl,
+    }));
+    setIsEditModalOpen(false);
+  };
+
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 pb-24 relative">
       
       {/* Banner y Avatar */}
       <div className="relative mb-16">
-        <div className="w-full h-32 sm:h-48 bg-zentry-card border border-zentry-border rounded-3xl overflow-hidden relative group cursor-pointer">
-          <div className="w-full h-full bg-gradient-to-r from-purple-600/40 to-blue-600/40" />
+        <div
+          onClick={isCurrentUser ? () => setIsEditModalOpen(true) : undefined}
+          className={`w-full h-32 sm:h-48 bg-zentry-card border border-zentry-border rounded-3xl overflow-hidden relative group ${isCurrentUser ? 'cursor-pointer' : ''}`}
+        >
+          {profile.bannerUrl ? (
+            <Image src={getImageUrl(profile.bannerUrl)} alt="Portada" fill sizes="800px" className="object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-r from-purple-600/40 to-blue-600/40" />
+          )}
           {isCurrentUser && (
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-sm font-medium gap-2">
               <Edit3 className="w-4 h-4" /> Cambiar portada
@@ -270,7 +275,11 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         </div>
         <div className="absolute -bottom-10 left-6 sm:left-10 group cursor-pointer">
           <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-zentry-bg bg-zentry-card flex items-center justify-center text-3xl sm:text-4xl font-bold text-zentry-text-1 relative overflow-hidden">
-            {(profile.name || profile.username || "DA").substring(0, 2).toUpperCase()}
+            {profile.avatarUrl ? (
+              <Image src={getImageUrl(profile.avatarUrl)} alt={profile.name} fill sizes="128px" className="object-cover" />
+            ) : (
+              (profile.name || profile.username || "DA").substring(0, 2).toUpperCase()
+            )}
             {isCurrentUser && (
               <div
                 onClick={() => setIsEditModalOpen(true)}
@@ -300,9 +309,13 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                 >
                   <Edit3 className="w-4 h-4" /> Editar
                 </button>
-                <button className="p-2 border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card transition-colors">
+                <Link
+                  href="/settings"
+                  title="Ajustes"
+                  className="p-2 border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card transition-colors"
+                >
                   <Settings className="w-4 h-4" />
-                </button>
+                </Link>
                 {/* BOTÓN DE CERRAR SESIÓN */}
                 <button 
                   onClick={() => setIsLogoutModalOpen(true)} 
@@ -345,7 +358,11 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                 </Link>
               </div>
             )}
-            <button className="p-2 border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card transition-colors">
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              title="Compartir perfil"
+              className="p-2 border border-zentry-border rounded-xl text-zentry-text-1 hover:bg-zentry-card transition-colors"
+            >
               <Share2 className="w-4 h-4" />
             </button>
           </div>
@@ -383,23 +400,23 @@ export default function ProfileClient({ initialData, username }: { initialData: 
           onClick={() => setActiveTab('posts')}
           className={`pb-3 flex items-center gap-2 text-xs sm:text-sm font-bold transition-colors relative shrink-0 cursor-pointer ${activeTab === 'posts' ? 'text-zentry-text-1' : 'text-zentry-text-2 hover:text-zentry-text-1'}`}
         >
-          <Grid className="w-4 h-4" /> Obras ({allPosts.filter(p => p.handle.toLowerCase().includes(decodedUsername.toLowerCase()) || p.author.toLowerCase().includes(decodedUsername.toLowerCase())).length})
+          <Grid className="w-4 h-4" /> Obras ({ownPosts.length})
           {activeTab === 'posts' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-zentry-accent rounded-t-full shadow-sm shadow-zentry-accent" />}
         </button>
 
-        <button 
+        <button
           onClick={() => setActiveTab('saved')}
           className={`pb-3 flex items-center gap-2 text-xs sm:text-sm font-bold transition-colors relative shrink-0 cursor-pointer ${activeTab === 'saved' ? 'text-zentry-text-1' : 'text-zentry-text-2 hover:text-zentry-text-1'}`}
         >
-          <Bookmark className="w-4 h-4" /> Guardados ({savedPostIds.length})
+          <Bookmark className="w-4 h-4" /> Guardados ({savedPosts.length})
           {activeTab === 'saved' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400 rounded-t-full shadow-sm shadow-amber-400" />}
         </button>
 
-        <button 
+        <button
           onClick={() => setActiveTab('liked')}
           className={`pb-3 flex items-center gap-2 text-xs sm:text-sm font-bold transition-colors relative shrink-0 cursor-pointer ${activeTab === 'liked' ? 'text-zentry-text-1' : 'text-zentry-text-2 hover:text-zentry-text-1'}`}
         >
-          <Heart className="w-4 h-4" /> Me gusta ({allPosts.filter(p => likedPostIds.includes(String(p.id)) || (p.liked_by && p.liked_by.includes(decodedUsername.toLowerCase()))).length})
+          <Heart className="w-4 h-4" /> Me gusta ({likedPosts.length})
           {activeTab === 'liked' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-t-full shadow-sm shadow-rose-500" />}
         </button>
 
@@ -416,10 +433,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       <div className="px-2 sm:px-4">
         {/* 1. PESTAÑA: OBRAS CREADAS */}
         {activeTab === 'posts' && (() => {
-          const userPosts = allPosts.filter(p => 
-            p.handle.toLowerCase().includes(decodedUsername.toLowerCase()) || 
-            p.author.toLowerCase().includes(decodedUsername.toLowerCase())
-          );
+          const userPosts = ownPosts;
 
           if (userPosts.length === 0) {
             return (
@@ -478,19 +492,17 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
         {/* 2. PESTAÑA: GUARDADOS (Estilo Instagram / TikTok) */}
         {activeTab === 'saved' && (() => {
-          if (!isCurrentUser) {
+          if (savedHidden) {
             return (
               <div className="text-center py-16 px-4 bg-zentry-card border border-zentry-border rounded-3xl space-y-3">
                 <FolderLock className="w-12 h-12 text-amber-400/60 mx-auto" />
                 <h3 className="text-base font-extrabold text-zentry-text-1">Colección Privada</h3>
                 <p className="text-xs text-zentry-text-2 max-w-sm mx-auto">
-                  Solo @{decodedUsername} puede ver sus publicaciones guardadas.
+                  @{decodedUsername} mantiene privadas sus publicaciones guardadas.
                 </p>
               </div>
             );
           }
-
-          const savedPosts = allPosts.filter(p => savedPostIds.includes(String(p.id)));
 
           if (savedPosts.length === 0) {
             return (
@@ -539,10 +551,17 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
         {/* 3. PESTAÑA: ME GUSTA (Estilo TikTok) */}
         {activeTab === 'liked' && (() => {
-          const likedPosts = allPosts.filter(p => 
-            likedPostIds.includes(String(p.id)) || 
-            (p.liked_by && p.liked_by.includes(decodedUsername.toLowerCase()))
-          );
+          if (likedHidden) {
+            return (
+              <div className="text-center py-16 px-4 bg-zentry-card border border-zentry-border rounded-3xl space-y-3">
+                <FolderLock className="w-12 h-12 text-rose-400/60 mx-auto" />
+                <h3 className="text-base font-extrabold text-zentry-text-1">Me gusta Privados</h3>
+                <p className="text-xs text-zentry-text-2 max-w-sm mx-auto">
+                  @{decodedUsername} mantiene privadas sus publicaciones con me gusta.
+                </p>
+              </div>
+            );
+          }
 
           if (likedPosts.length === 0) {
             return (
@@ -754,7 +773,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
             >
               <div className="p-4 border-b border-zentry-border flex justify-between items-center bg-zentry-bg">
                 <h3 className="font-bold text-lg text-zentry-text-1">Editar Perfil</h3>
-                <button onClick={() => setIsEditModalOpen(false)} className="text-zentry-text-2 hover:text-zentry-text-1 transition-colors">
+                <button onClick={handleCancelEdit} className="text-zentry-text-2 hover:text-zentry-text-1 transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
@@ -830,8 +849,8 @@ export default function ProfileClient({ initialData, username }: { initialData: 
               </div>
 
               <div className="p-4 border-t border-zentry-border bg-zentry-bg flex justify-end gap-3">
-                <button 
-                  onClick={() => setIsEditModalOpen(false)}
+                <button
+                  onClick={handleCancelEdit}
                   className="px-5 py-2.5 rounded-xl text-sm font-bold text-zentry-text-2 hover:bg-zentry-card transition-colors"
                   disabled={isSaving}
                 >
@@ -860,6 +879,16 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
       {/* MODAL PORTAL DE CIERRE DE SESIÓN ANIMADO */}
       <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} />
+
+      <ShareProfileModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        username={profile.username || decodedUsername}
+        name={profile.name || decodedUsername}
+        avatarUrl={profile.avatarUrl}
+        posts={ownPosts}
+        showOwnProjects={isCurrentUser}
+      />
 
     </div>
   )

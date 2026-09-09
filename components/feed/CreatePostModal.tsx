@@ -74,7 +74,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
       } else {
         toast.error(res.error || "Error al publicar");
       }
-    } catch (err) {
+    } catch {
       toast.error("Error al publicar la obra");
     } finally {
       setIsUploading(false);

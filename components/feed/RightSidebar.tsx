@@ -3,9 +3,9 @@
 import { useState, useEffect, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Bell, Users, Check, X, Flame, Settings, Shield, 
-  Moon, Sun, CheckCircle2, KeyRound, Palette, SlidersHorizontal, LogOut,
-  MessageSquare, Loader2, Zap, ShieldCheck
+  Bell, Users, Check, X, Flame, Settings, Shield,
+  Moon, Sun, KeyRound, Palette, SlidersHorizontal, LogOut,
+  MessageSquare, Loader2, Zap
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -15,26 +15,21 @@ import Image from "next/image";
 import LogoutModal from "@/components/shared/LogoutModal";
 import { FriendUser } from "@/types";
 import { getImageUrl, getInitials } from "@/lib/utils";
-import { 
-  getFriendsAction, 
-  getPendingFriendRequestsAction, 
-  acceptFriendRequestAction, 
+import {
+  getFriendsAction,
+  getPendingFriendRequestsAction,
+  acceptFriendRequestAction,
   rejectFriendRequestAction,
   pingPresenceAction,
-  getUserStatsAction,
-  UserSocialStats
 } from "@/lib/actions/friends";
-import useSWR from "swr";
-import { 
-  getUserStreak, 
-  checkInDailyStreak, 
-  UserStreak,
-  DEFAULT_STREAK
-} from "@/lib/streak";
+import { fetchDailyMissions } from "@/lib/actions/gamification";
+import { DailyMission } from "@/lib/gamification";
+import { getActiveAdsAction, AdDTO } from "@/lib/actions/ads";
+import AdCard from "./AdCard";
 import MissionsModal from "./MissionsModal";
 
 export default function RightSidebar() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const rawUsername = user?.username || user?.email || 'creador';
@@ -44,34 +39,32 @@ export default function RightSidebar() {
   const [requests, setRequests] = useState<FriendUser[]>([]);
   const [friends, setFriends] = useState<FriendUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
-  // Estados de Racha Diaria tipo TikTok
-  const [mounted, setMounted] = useState(false);
-  const [streak, setStreak] = useState<UserStreak>(DEFAULT_STREAK);
+  // Estado de la Racha: encendida o apagada según las misiones diarias reales
+  const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
   const [isMissionsOpen, setIsMissionsOpen] = useState(false);
+  const [sidebarAd, setSidebarAd] = useState<AdDTO | null>(null);
 
   // Modal / Drawer de Ajustes Globales
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'notifications' | 'appearance' | 'account'>('privacy');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-  // SWR para obtener estadísticas reales de la BD
-  const { data: swrRes } = useSWR(
-    user?.username ? 'userStatsRight' : null,
-    async () => await getUserStatsAction(),
-    { refreshInterval: 15000, fallbackData: { success: true, data: undefined as UserSocialStats | undefined } }
-  );
-  const stats = swrRes?.data || null;
-  const currentStreak = stats?.current_streak || 0;
 
-  // Carga de Racha por usuario tras montaje
+  // Carga de misiones diarias reales tras montaje (definen si la racha está encendida)
   useEffect(() => {
-    setMounted(true);
-    if (cleanUsername) {
-      setStreak(getUserStreak(cleanUsername));
-    }
+    fetchDailyMissions().then(res => {
+      if (res.success) setDailyMissions(res.missions);
+    });
+    getActiveAdsAction('SIDEBAR').then(res => {
+      if (res.success && res.data.length > 0) setSidebarAd(res.data[0]);
+    });
   }, [cleanUsername]);
+
+  const completedMissionsToday = dailyMissions.filter(m => m.isClaimed).length;
+  const totalDailyMissions = dailyMissions.length;
+  const isStreakOn = completedMissionsToday > 0;
 
   // Carga de Amigos y Solicitudes
   const fetchSocialData = async () => {
@@ -127,20 +120,6 @@ export default function RightSidebar() {
     });
   };
 
-  // Check-in diario de la racha
-  const handleCheckInStreak = () => {
-    const res = checkInDailyStreak(cleanUsername);
-    if (res.success) {
-      setStreak(res.streak);
-      if (user) {
-        updateUser({ zentry_coins: (user.zentry_coins || 0) + res.rewardBonus });
-      }
-      toast.success(`🔥 ¡Racha aumentada a ${res.streak.currentStreak} días! Ganaste +${res.rewardBonus} ZC 🎉`);
-    } else {
-      toast.info("¡Ya mantuviste tu racha hoy! Vuelve mañana para seguir sumando 🔥");
-    }
-  };
-
   const currentUsername = user?.username || user?.email;
   const onlineFriends = friends.filter(
     f => f.is_online && f.username !== currentUsername && String(f.id) !== String(user?.id)
@@ -150,97 +129,50 @@ export default function RightSidebar() {
     <aside className="flex flex-col gap-4 p-4 lg:p-6 w-full h-full">
       <div className="flex flex-col gap-6 w-full h-full pb-8">
         
-        {/* 1. SECCIÓN PRINCIPAL: RACHA DIARIA TIPO TIKTOK 🔥 */}
-        <div className="bg-gradient-to-br from-orange-950/80 via-[#181224] to-purple-950/70 border border-orange-500/40 rounded-3xl p-5 shadow-xl relative overflow-hidden space-y-4">
-          <div className="absolute -top-10 -right-10 w-36 h-36 bg-orange-500/15 rounded-full blur-3xl pointer-events-none" />
+        {/* 1. SECCIÓN PRINCIPAL: RACHA DIARIA (encendida/apagada según misiones reales) 🔥 */}
+        <div className={`border rounded-3xl p-5 shadow-xl relative overflow-hidden space-y-4 transition-colors ${
+          isStreakOn
+            ? 'bg-gradient-to-br from-orange-950/80 via-[#181224] to-purple-950/70 border-orange-500/40'
+            : 'bg-zentry-card border-zentry-border'
+        }`}>
+          {isStreakOn && <div className="absolute -top-10 -right-10 w-36 h-36 bg-orange-500/15 rounded-full blur-3xl pointer-events-none" />}
 
           {/* Cabecera de la Racha */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/40 animate-pulse">
-                  <Flame className="w-7 h-7 fill-white text-orange-200" />
-                </div>
-                <span suppressHydrationWarning className="absolute -bottom-1 -right-1 bg-black/80 text-[10px] font-black text-amber-400 px-1.5 py-0.2 rounded-full border border-amber-500/40 font-mono">
-                  x{streak.multiplier.toFixed(1)}
-                </span>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
+                isStreakOn
+                  ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-orange-500/40 animate-pulse'
+                  : 'bg-zentry-bg border border-zentry-border text-zentry-text-2'
+              }`}>
+                <Flame className={`w-7 h-7 ${isStreakOn ? 'fill-white text-orange-200' : ''}`} />
               </div>
 
               <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 suppressHydrationWarning className="font-black text-base text-white tracking-tight">
-                    {currentStreak} {currentStreak === 1 ? 'Día' : 'Días'} de Racha
-                  </h3>
-                </div>
-                <p suppressHydrationWarning className="text-[10px] text-orange-300/90 font-medium">
-                  {streak.todayCompleted ? '🔥 ¡Racha activa hoy!' : '⚡ Mantén tu fuego encendido'}
+                <h3 className={`font-black text-base tracking-tight ${isStreakOn ? 'text-white' : 'text-zentry-text-1'}`}>
+                  Racha {isStreakOn ? 'Encendida' : 'Apagada'}
+                </h3>
+                <p suppressHydrationWarning className={`text-[10px] font-medium ${isStreakOn ? 'text-orange-300/90' : 'text-zentry-text-2'}`}>
+                  {totalDailyMissions === 0
+                    ? 'Cargando misiones de hoy...'
+                    : `${completedMissionsToday}/${totalDailyMissions} misiones completadas hoy`}
                 </p>
               </div>
             </div>
-
-            {/* Escudos de Protección */}
-            <div className="flex items-center gap-1 bg-[#0d0914] px-2.5 py-1 rounded-xl border border-orange-500/30 text-amber-400 text-xs font-black shadow-inner" title="Escudos de Racha disponibles">
-              <ShieldCheck className="w-3.5 h-3.5 text-orange-400" />
-              <span suppressHydrationWarning className="text-[10px] font-mono">{streak.streakShields}</span>
-            </div>
           </div>
 
-          {/* Días de la Semana Tracker (TikTok / Duolingo style) */}
-          <div className="grid grid-cols-7 gap-1.5 p-2.5 bg-[#0a0712]/90 rounded-2xl border border-zinc-800/80">
-            {streak.weeklyDays.map((d, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-1">
-                <span className="text-[9px] font-bold text-zinc-400 uppercase">
-                  {d.day}
-                </span>
-                <div 
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                    d.checked 
-                      ? 'bg-gradient-to-br from-orange-500 to-amber-400 text-black shadow-md shadow-orange-500/30 scale-105' 
-                      : d.isToday 
-                        ? 'border-2 border-orange-400 text-orange-400 bg-orange-950/40 animate-pulse' 
-                        : 'bg-zinc-800/60 text-zinc-600 border border-zinc-800'
-                  }`}
-                >
-                  {d.checked ? (
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  ) : (
-                    <span className="text-[10px]">•</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Botón de Acción de Racha */}
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={handleCheckInStreak}
-              disabled={streak.todayCompleted}
-              className={`flex-1 py-2.5 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-md ${
-                streak.todayCompleted
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-                  : 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 hover:opacity-95 text-black shadow-orange-500/30 active:scale-95 cursor-pointer'
-              }`}
-            >
-              {streak.todayCompleted ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" /> Racha Completada Hoy
-                </>
-              ) : (
-                <>
-                  <Flame className="w-4 h-4 fill-black" /> Encender Racha (+{50 + currentStreak * 10} ZC)
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={() => setIsMissionsOpen(true)}
-              className="p-2.5 bg-[#140e22] hover:bg-[#1e1532] border border-orange-500/30 text-amber-400 rounded-2xl transition-colors shrink-0"
-              title="Abrir Centro de Misiones"
-            >
-              <Zap className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Botón de Acción: Abrir Misiones */}
+          <button
+            onClick={() => setIsMissionsOpen(true)}
+            className={`w-full py-2.5 px-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer ${
+              isStreakOn
+                ? 'bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 hover:opacity-95 text-black shadow-orange-500/30 active:scale-95'
+                : 'bg-zentry-bg border border-zentry-border text-zentry-text-1 hover:border-zentry-accent active:scale-95'
+            }`}
+          >
+            <Zap className="w-4 h-4" />
+            {isStreakOn ? 'Ver Misiones Diarias' : 'Completa una misión para encender tu racha'}
+          </button>
         </div>
 
         {/* 2. SOLICITUDES DE AMISTAD DINÁMICAS */}
@@ -256,9 +188,9 @@ export default function RightSidebar() {
                 <h3 className="font-bold text-sm text-zentry-text-1 flex items-center gap-2">
                   <Bell className="w-4 h-4 text-zentry-accent" /> Solicitudes ({requests.length})
                 </h3>
-                <span className="text-[10px] font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 animate-pulse">
-                  Nuevas
-                </span>
+                <Link href="/friends" className="text-[10px] font-black text-zentry-accent hover:underline">
+                  Ver todas
+                </Link>
               </div>
               
               <div className="space-y-3">
@@ -371,6 +303,9 @@ export default function RightSidebar() {
             </div>
           )}
         </div>
+
+        {/* 3.5. ANUNCIO PATROCINADO */}
+        {sidebarAd && <AdCard ad={sidebarAd} variant="sidebar" />}
 
         {/* 4. AJUSTES GLOBALES */}
         <div className="bg-zentry-card border border-zentry-border rounded-3xl p-4 flex items-center justify-between shadow-sm">

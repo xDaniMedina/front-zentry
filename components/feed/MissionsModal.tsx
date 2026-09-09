@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Flame, Trophy, CheckCircle2, X,
-  Lock, Gift, Filter, RefreshCw
+  Lock, Gift, Filter, RefreshCw, Crown
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -15,17 +15,28 @@ import {
   getTodayDateString
 } from "@/lib/gamification";
 import { fetchDailyMissions, fetchAchievements, claimMission } from "@/lib/actions/gamification";
+import { getUserStatsAction, UserSocialStats } from "@/lib/actions/friends";
+
+const RANK_TIERS = [
+  { name: "Bronce", min: 0, icon: "🥉" },
+  { name: "Plata", min: 100, icon: "🥈" },
+  { name: "Oro", min: 300, icon: "🥇" },
+  { name: "Platino", min: 700, icon: "💠" },
+  { name: "Diamante", min: 1500, icon: "💎" },
+  { name: "Leyenda", min: 3000, icon: "👑" },
+];
 
 export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { user, updateUser } = useAuth();
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'missions' | 'achievements'>('missions');
+  const [activeTab, setActiveTab] = useState<'missions' | 'achievements' | 'ranks'>('missions');
   const [selectedAchievementCategory, setSelectedAchievementCategory] = useState<string>('all');
-  
+
   // Estado dinámico de misiones y logros para el usuario en sesión
   const userKey = user?.id ? String(user.id) : (user?.username || 'guest');
   const [missions, setMissions] = useState<DailyMission[]>([]);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
+  const [stats, setStats] = useState<UserSocialStats | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -34,12 +45,14 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
   useEffect(() => {
     if (mounted) {
       const loadGamification = async () => {
-        const [missionsRes, achievementsRes] = await Promise.all([
+        const [missionsRes, achievementsRes, statsRes] = await Promise.all([
           fetchDailyMissions(),
-          fetchAchievements()
+          fetchAchievements(),
+          getUserStatsAction(),
         ]);
         if (missionsRes.success) setMissions(missionsRes.missions);
         if (achievementsRes.success) setAchievements(achievementsRes.achievements);
+        if (statsRes.success && statsRes.data) setStats(statsRes.data);
       };
       loadGamification();
     }
@@ -119,7 +132,7 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg sm:text-xl font-black text-white">Centro de Misiones & Logros</h2>
                   <span className="text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
-                    Nivel Creador
+                    {stats ? `${stats.rank}` : 'Cargando rango...'}
                   </span>
                 </div>
                 <p className="text-xs text-zentry-text-2">
@@ -158,6 +171,17 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
               }`}
             >
               <Trophy className="w-4 h-4" /> Banco de Logros ({totalAchievementsUnlocked}/{achievements.length})
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ranks')}
+              className={`flex-1 py-3 px-4 rounded-2xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'ranks'
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-600 text-white shadow-lg shadow-amber-500/25 scale-[1.01]'
+                  : 'text-zinc-400 hover:text-white hover:bg-[#181828] border border-transparent'
+              }`}
+            >
+              <Crown className="w-4 h-4" /> Rangos {stats ? `(${stats.rank})` : ''}
             </button>
           </div>
 
@@ -398,6 +422,81 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* PESTAÑA 3: RANGOS */}
+            {activeTab === 'ranks' && (
+              <div className="space-y-5">
+                <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-[#151524] to-yellow-950/30 border border-amber-500/30 flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <p className="text-[10px] uppercase font-black tracking-wider text-amber-400">Tu rango actual</p>
+                    <p className="text-2xl font-black text-white flex items-center gap-2 mt-1">
+                      {RANK_TIERS.find(t => t.name === stats?.rank)?.icon || '🥉'} {stats?.rank || 'Cargando...'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-zinc-400">Puntos de reputación</p>
+                    <p className="text-xl font-black text-white font-mono">{stats?.reputation_score ?? 0} pts</p>
+                    {stats?.next_rank_score != null && (
+                      <p className="text-[11px] text-zinc-400 mt-1">
+                        Faltan <span className="text-amber-400 font-bold">{Math.max(0, stats.next_rank_score - stats.reputation_score)} pts</span> para el siguiente rango
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {RANK_TIERS.map((tier, idx) => {
+                    const score = stats?.reputation_score ?? 0;
+                    const isCurrent = tier.name === stats?.rank;
+                    const isUnlocked = score >= tier.min;
+                    const nextTier = RANK_TIERS[idx + 1];
+                    const rangeMax = nextTier ? nextTier.min : tier.min;
+                    const progressPct = nextTier
+                      ? Math.min(100, Math.max(0, Math.round(((score - tier.min) / (rangeMax - tier.min)) * 100)))
+                      : 100;
+
+                    return (
+                      <div
+                        key={tier.name}
+                        className={`p-4 rounded-2xl border flex items-center gap-4 transition-all ${
+                          isCurrent
+                            ? 'bg-gradient-to-r from-amber-950/40 via-zentry-card to-yellow-950/20 border-amber-500/60 shadow-md'
+                            : isUnlocked
+                              ? 'bg-[#151524] border-zinc-700'
+                              : 'bg-[#0e0e18] border-zinc-800 opacity-60'
+                        }`}
+                      >
+                        <span className="text-3xl shrink-0">{tier.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-extrabold text-sm text-white">{tier.name}</h4>
+                            <span className="text-[10px] font-mono text-zinc-400">{tier.min}+ pts</span>
+                          </div>
+                          {nextTier && (
+                            <div className="w-full bg-[#0a0a12] border border-zentry-border rounded-full h-1.5 overflow-hidden mt-2">
+                              <div
+                                className="bg-gradient-to-r from-amber-500 to-yellow-400 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${isUnlocked ? progressPct : 0}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        {isCurrent && (
+                          <span className="text-[10px] font-black text-amber-400 bg-amber-500/15 px-2.5 py-1 rounded-full border border-amber-500/30 shrink-0">
+                            ACTUAL
+                          </span>
+                        )}
+                        {!isUnlocked && <Lock className="w-4 h-4 text-zinc-600 shrink-0" />}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[11px] text-zinc-400 text-center">
+                  Gana reputación publicando obras y consiguiendo seguidores para subir de rango.
+                </p>
               </div>
             )}
 

@@ -20,8 +20,10 @@ import { useAuth } from "@/context/AuthContext"
 import { getImageUrl, getInitials, timeAgo } from "@/lib/utils"
 import { getFriendsAction } from "@/lib/actions/friends"
 import { getFeedPosts, toggleLikePostAction, getPostCommentsAction, addPostCommentAction } from "@/lib/actions/feed"
+import { getStoryFeedAction, viewStoryAction, toggleStoryLikeAction, replyToStoryAction, deleteStoryAction } from "@/lib/actions/stories"
+import { getActiveAdsAction, AdDTO } from "@/lib/actions/ads"
+import AdCard from "@/components/feed/AdCard"
 import { FriendUser, UserStoryGroup, StoryItem } from "@/types"
-import { INITIAL_STORIES_DATA, getLocalUserStories, markStoryGroupViewed, getViewedStoryIds } from "@/lib/stories"
 
 const containerVariants: Variants = { 
   hidden: { opacity: 0 }, 
@@ -35,6 +37,7 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   const displayName = user?.name || user?.username || 'Creador Zentry';
 
   const [posts, setPosts] = useState<PostType[]>([]);
+  const [ads, setAds] = useState<AdDTO[]>([]);
   const [friends, setFriends] = useState<FriendUser[]>([]);
   const [likedPosts, setLikedPosts] = useState<(string | number)[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,12 +56,18 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
-  // 1. Cargar Posts Reales desde el Backend
+  // 1. Cargar Posts Reales desde el Backend (más recientes primero)
+  const [feedPage, setFeedPage] = useState(0);
+  const [hasMorePosts, setHasMorePosts] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const loadPosts = async () => {
-    const res = await getFeedPosts();
+    const res = await getFeedPosts(0);
     if (res.success && res.data) {
       setPosts(res.data);
       setLikedPosts(res.data.filter(p => p.liked).map(p => p.id));
+      setFeedPage(0);
+      setHasMorePosts(Boolean(res.hasMore));
       return;
     }
 
@@ -67,61 +76,29 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
     }
   };
 
-  // 2. Cargar Historias Dinámicas estilo Instagram
-  const loadStories = useCallback(async () => {
-    try {
-      const res = await fetch('/api/stories');
-      let baseStories: UserStoryGroup[] = INITIAL_STORIES_DATA;
+  const loadMorePosts = async () => {
+    setIsLoadingMore(true);
+    const nextPage = feedPage + 1;
+    const res = await getFeedPosts(nextPage);
+    setIsLoadingMore(false);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-          baseStories = data.data;
-        }
-      }
-
-      const viewedIds = getViewedStoryIds();
-      const localUserItems = getLocalUserStories();
-
-      // Construir grupo de historia del usuario actual
-      const userGroupIndex = baseStories.findIndex(g => g.isUser || g.username.toLowerCase() === rawUsername);
-      let userStoryGroup: UserStoryGroup;
-
-      if (userGroupIndex >= 0) {
-        userStoryGroup = {
-          ...baseStories[userGroupIndex],
-          isUser: true,
-          items: localUserItems.length > 0 ? [...localUserItems, ...baseStories[userGroupIndex].items] : baseStories[userGroupIndex].items,
-          avatar_url: user?.avatar_url || baseStories[userGroupIndex].avatar_url,
-          name: displayName
-        };
-      } else {
-        userStoryGroup = {
-          id: user?.id || 'my_user_story',
-          username: rawUsername,
-          name: displayName,
-          avatar: getInitials(displayName),
-          avatar_url: user?.avatar_url,
-          isUser: true,
-          hasUnseen: localUserItems.length > 0,
-          items: localUserItems,
-          last_updated: 'Justo ahora'
-        };
-      }
-
-      // Filtrar otros creadores y marcar estado visto
-      const otherGroups = baseStories
-        .filter(g => !g.isUser && g.username.toLowerCase() !== rawUsername)
-        .map(g => ({
-          ...g,
-          hasUnseen: !viewedIds.includes(String(g.id))
-        }));
-
-      setStoryGroups([userStoryGroup, ...otherGroups]);
-    } catch {
-      setStoryGroups(INITIAL_STORIES_DATA);
+    if (res.success && res.data) {
+      setPosts(prev => [...prev, ...(res.data as PostType[])]);
+      setLikedPosts(prev => [...prev, ...(res.data as PostType[]).filter(p => p.liked).map(p => p.id)]);
+      setFeedPage(nextPage);
+      setHasMorePosts(Boolean(res.hasMore));
+    } else {
+      toast.error("No se pudieron cargar más publicaciones");
     }
-  }, [user, rawUsername, displayName]);
+  };
+
+  // 2. Cargar Historias Reales desde el Backend (estilo Instagram)
+  const loadStories = useCallback(async () => {
+    const res = await getStoryFeedAction();
+    if (res.success) {
+      setStoryGroups(res.data);
+    }
+  }, []);
 
   // Cargar Amigos, Posts e Historias
   useEffect(() => {
@@ -134,64 +111,53 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
         if (res.success && res.data) {
           setFriends(res.data);
         }
-      } catch (e) {}
+      } catch { /* ignore */ }
     }
 
     loadFriends();
+
+    getActiveAdsAction('FEED').then(res => {
+      if (res.success) setAds(res.data);
+    });
   }, [loadStories]);
 
-  // Manejar cuando se ve una historia
+  // Manejar cuando se ve una historia (marca cada ítem del grupo como visto en el backend)
   const handleStoryGroupViewed = (groupId: string | number) => {
-    markStoryGroupViewed(groupId);
-    setStoryGroups(prev => prev.map(g => {
-      if (g.id === groupId) {
-        return { ...g, hasUnseen: false };
-      }
-      return g;
-    }));
+    const group = storyGroups.find(g => g.id === groupId);
+    setStoryGroups(prev => prev.map(g => g.id === groupId ? { ...g, hasUnseen: false } : g));
 
-    try {
-      fetch('/api/stories', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'view', groupId })
-      });
-    } catch {}
+    group?.items.forEach(item => {
+      viewStoryAction(item.id);
+    });
   };
 
-  // Manejar Like en Historia
-  const handleLikeStory = (storyId: string, groupId: string | number) => {
-    setStoryGroups(prev => prev.map(g => {
-      if (g.id === groupId) {
-        return {
-          ...g,
-          items: g.items.map(item => {
-            if (item.id === storyId) {
-              const nextLiked = !item.liked;
-              return {
-                ...item,
-                liked: nextLiked,
-                likes: nextLiked ? item.likes + 1 : Math.max(0, item.likes - 1)
-              };
-            }
-            return item;
-          })
-        };
-      }
-      return g;
+  // Manejar Like en Historia (optimista, revertido si el backend falla)
+  const handleLikeStory = async (storyId: string, groupId: string | number) => {
+    const wasLiked = storyGroups
+      .find(g => g.id === groupId)?.items.find(i => i.id === storyId)?.liked ?? false;
+
+    const applyLiked = (liked: boolean) => setStoryGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        items: g.items.map(item => item.id === storyId
+          ? { ...item, liked, likes: liked ? item.likes + 1 : Math.max(0, item.likes - 1) }
+          : item)
+      };
     }));
 
-    try {
-      fetch('/api/stories', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'like', storyId, groupId })
-      });
-    } catch {}
+    applyLiked(!wasLiked);
+
+    const res = await toggleStoryLikeAction(storyId);
+    if (!res.success) {
+      applyLiked(wasLiked);
+      toast.error("No se pudo reaccionar a la historia");
+    }
   };
 
   // Manejar eliminación de historia
   const handleDeleteStory = async (storyId: string, groupId: string | number) => {
+    const previousGroups = storyGroups;
     setStoryGroups(prev => prev.map(g => {
       if (g.id === groupId) {
         return {
@@ -202,11 +168,22 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       return g;
     }));
 
-    try {
-      fetch('/api/core/stories/' + storyId + '?userId=' + (user?.id || 1), {
-        method: 'DELETE'
-      });
-    } catch {}
+    const res = await deleteStoryAction(storyId);
+    if (!res.success) {
+      setStoryGroups(previousGroups);
+      toast.error(res.error || "No se pudo eliminar la historia");
+    }
+  };
+
+  // Manejar respuesta a una historia (envía un mensaje directo real al dueño)
+  const handleReplyToStory = async (groupId: string | number, storyId: string, message: string) => {
+    const group = storyGroups.find(g => g.id === groupId);
+    const res = await replyToStoryAction(storyId, message);
+    if (res.success) {
+      toast.success(`Mensaje enviado a @${group?.username || 'usuario'}`);
+    } else {
+      toast.error(res.error || "No se pudo enviar tu respuesta");
+    }
   };
 
   // Manejar nueva historia creada por el usuario
@@ -478,18 +455,35 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
         </div>
       ) : (
         <div className={layoutStyle === 'grid' ? 'columns-1 sm:columns-2 gap-6 space-y-6' : 'flex flex-col gap-6'}>
-          {filteredPosts.map(post => (
-            <FeedCard 
-              key={post.id}
-              post={post}
-              currentUsername={rawUsername}
-              isLiked={likedPosts.includes(post.id)}
-              onLike={toggleLike}
-              onComment={handleOpenComments}
-              onShare={handleShare}
-              isListMode={layoutStyle === 'list'}
-            />
+          {filteredPosts.map((post, idx) => (
+            <div key={post.id} className="break-inside-avoid">
+              <FeedCard
+                post={post}
+                isLiked={likedPosts.includes(post.id)}
+                onLike={toggleLike}
+                onComment={handleOpenComments}
+                onShare={handleShare}
+                isListMode={layoutStyle === 'list'}
+              />
+              {ads.length > 0 && (idx + 1) % 3 === 0 && (
+                <AdCard ad={ads[Math.floor(idx / 3) % ads.length]} variant="feed" />
+              )}
+            </div>
           ))}
+        </div>
+      )}
+
+      {/* Cargar más publicaciones (paginación real, no solo las primeras 20) */}
+      {hasMorePosts && searchQuery === "" && activeTab !== 'Siguiendo' && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={loadMorePosts}
+            disabled={isLoadingMore}
+            className="px-6 py-2.5 bg-zentry-card border border-zentry-border text-zentry-text-1 rounded-2xl text-xs font-black hover:border-zentry-accent transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {isLoadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {isLoadingMore ? 'Cargando...' : 'Cargar más publicaciones'}
+          </button>
         </div>
       )}
 
@@ -591,9 +585,9 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
           onClose={() => setActiveViewerGroupIndex(null)}
           onStoryGroupViewed={handleStoryGroupViewed}
           onLikeStory={handleLikeStory}
-          onSendReply={(groupId, storyId, message) => {
-            toast.success("Mensaje enviado con éxito");
-          }}
+          onSendReply={handleReplyToStory}
+          onDeleteStory={handleDeleteStory}
+          currentUserId={user?.id}
         />
       )}
 

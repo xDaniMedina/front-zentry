@@ -33,6 +33,34 @@ export async function getPendingFriendRequestsAction(): Promise<{ success: boole
   }
 }
 
+export async function getSentFriendRequestsAction(): Promise<{ success: boolean; data?: FriendUser[]; error?: string }> {
+  try {
+    const res = await fetchAPI('/api/core/friends/requests/sent')
+    if (!res) {
+      return { success: true, data: [] }
+    }
+    const list = Array.isArray(res) ? res : (res.data || res.content || [])
+    return { success: true, data: list }
+  } catch (error) {
+    console.error('Error al obtener solicitudes enviadas:', error)
+    return { success: false, error: 'Error al cargar solicitudes enviadas' }
+  }
+}
+
+export async function getFriendSuggestionsAction(limit: number = 12): Promise<{ success: boolean; data?: FriendUser[]; error?: string }> {
+  try {
+    const res = await fetchAPI(`/api/core/friends/suggestions?limit=${limit}`)
+    if (!res) {
+      return { success: true, data: [] }
+    }
+    const list = Array.isArray(res) ? res : (res.data || res.content || [])
+    return { success: true, data: list }
+  } catch (error) {
+    console.error('Error al obtener sugerencias de amistad:', error)
+    return { success: false, error: 'Error al cargar sugerencias' }
+  }
+}
+
 export async function sendFriendRequestAction(
   targetUserIdOrUsername: number | string,
   message?: string
@@ -125,6 +153,9 @@ export interface UserSocialStats {
   coins_today: number;
   reputation_score: number;
   current_streak?: number;
+  rank: string;
+  rank_min_score: number;
+  next_rank_score: number | null;
 }
 
 export async function getUserStatsAction(): Promise<{ success: boolean; data?: UserSocialStats; error?: string }> {

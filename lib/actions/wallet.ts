@@ -2,7 +2,7 @@
 
 import { fetchAPI, ApiError } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
-import { Transaction } from '@/types'
+import { WalletTransaction } from '@/types'
 
 type BackendWalletTransaction = {
   id: number
@@ -22,18 +22,24 @@ type BackendWallet = {
   transactions: BackendWalletTransaction[]
 }
 
-function toTransaction(t: BackendWalletTransaction): Transaction {
+function toWalletTransaction(t: BackendWalletTransaction): WalletTransaction {
   return {
     id: String(t.id),
-    user_id: t.username,
+    type: t.type.toLowerCase() as WalletTransaction['type'],
     amount: t.amount,
-    type: t.type === 'EGRESO' ? 'debit' : 'credit',
     description: t.description,
-    created_at: t.createdAt,
+    date: t.createdAt ? new Date(t.createdAt).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '',
   }
 }
 
-export async function getWalletBalance(): Promise<{ success: boolean; coins?: number; planId?: string; transactions?: Transaction[]; error?: string }> {
+export async function getWalletBalance(): Promise<{
+  success: boolean
+  coins?: number
+  planId?: string
+  nextBillingDate?: string | null
+  transactions?: WalletTransaction[]
+  error?: string
+}> {
   try {
     const data: BackendWallet | null = await fetchAPI('/api/core/wallet')
     if (!data) {
@@ -43,7 +49,10 @@ export async function getWalletBalance(): Promise<{ success: boolean; coins?: nu
       success: true,
       coins: data.balance ?? 0,
       planId: data.activePlanId,
-      transactions: (data.transactions || []).map(toTransaction),
+      nextBillingDate: data.nextBillingDate
+        ? new Date(data.nextBillingDate).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })
+        : null,
+      transactions: (data.transactions || []).map(toWalletTransaction),
     }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Error de servidor'

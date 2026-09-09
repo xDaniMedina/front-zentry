@@ -1,26 +1,19 @@
 "use client"
 
 import { useState, useEffect, useTransition } from "react";
-import { 
-  Bell, Heart, UserPlus, Star, CheckCheck, MessageSquare, Trash2, 
-  Sparkles 
+import {
+  Bell, Heart, UserPlus, Star, CheckCheck, MessageSquare, Trash2,
+  Sparkles, Loader2, UserCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Notification } from "@/types";
-import { 
-  getNotificationsAction, 
-  markNotificationReadAction, 
-  markAllNotificationsReadAction, 
-  clearNotificationsAction 
+import {
+  getNotificationsAction,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+  clearNotificationsAction
 } from "@/lib/actions/notifications";
-
-const INITIAL_FALLBACK_NOTIFS: Notification[] = [
-  { id: 1, type: 'like', text: "A Ryuu Logic le gustó tu proyecto 'Cyber Art'", time: "Hace 5m", read: false },
-  { id: 2, type: 'comment', text: "LuisDev comentó: '¡Increíble la arquitectura!'", time: "Hace 1h", read: false },
-  { id: 3, type: 'follow', text: "StatMaster ha comenzado a seguirte", time: "Hace 2h", read: true },
-  { id: 4, type: 'reward', text: "Has recibido 50 Zentry Coins por tu racha creativa", time: "Hace 5h", read: true },
-];
 
 function getNotificationIcon(type: Notification['type']) {
   switch (type) {
@@ -30,6 +23,10 @@ function getNotificationIcon(type: Notification['type']) {
       return { icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
     case 'follow':
       return { icon: UserPlus, color: 'text-blue-500', bg: 'bg-blue-500/10' };
+    case 'friend_request':
+      return { icon: UserPlus, color: 'text-blue-500', bg: 'bg-blue-500/10' };
+    case 'friend_accept':
+      return { icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
     case 'reward':
       return { icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' };
     case 'system':
@@ -39,26 +36,21 @@ function getNotificationIcon(type: Notification['type']) {
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_FALLBACK_NOTIFS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [isLoading, setIsLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
-  // Cargar notificaciones desde el backend al montar
+  // Cargar notificaciones reales desde el backend al montar (nunca datos de relleno)
   useEffect(() => {
     let isMounted = true;
-    startTransition(async () => {
-      try {
-        const res = await getNotificationsAction();
-        if (isMounted && res.success && res.data && res.data.length > 0) {
-          setNotifications(res.data);
-        }
-      } catch (err) {
-        console.warn("Fallback local notifications:", err);
-      } finally {
-        if (isMounted) setIsLoading(false);
+    (async () => {
+      const res = await getNotificationsAction();
+      if (isMounted && res.success && res.data) {
+        setNotifications(res.data);
       }
-    });
+      if (isMounted) setIsLoading(false);
+    })();
 
     return () => {
       isMounted = false;
@@ -167,7 +159,11 @@ export default function NotificationsPage() {
 
       {/* Lista de Notificaciones */}
       <div className="space-y-3">
-        {displayedNotifs.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16 sm:py-20 text-zentry-text-2 gap-2 text-xs">
+            <Loader2 className="w-5 h-5 animate-spin" /> Cargando notificaciones...
+          </div>
+        ) : displayedNotifs.length === 0 ? (
           <div className="text-center py-16 sm:py-20 bg-zentry-card/40 border border-zentry-border border-dashed rounded-3xl space-y-3">
             <Bell className="w-12 h-12 text-zinc-700 mx-auto" />
             <p className="text-zentry-text-1 font-bold text-sm">No tienes notificaciones pendientes</p>

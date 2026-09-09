@@ -316,20 +316,34 @@ export async function deleteTaskAction(
 
 export async function addResourceAction(
   projectId: string | number,
-  payload: { name: string; type: string; size: string; url?: string }
-   
-): Promise<{ success: boolean; data?: any }> {
+  payload: { name?: string; type?: string; url?: string; file?: File | null }
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
-    const res = await fetchAPI(`/api/core/projects/${projectId}/resources`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
+    let res;
+    if (payload.file) {
+      const formData = new FormData()
+      formData.append('name', payload.name || payload.file.name)
+      formData.append('file', payload.file)
+      res = await fetchAPI(`/api/core/projects/${projectId}/resources`, {
+        method: 'POST',
+        body: formData,
+      })
+    } else {
+      res = await fetchAPI(`/api/core/projects/${projectId}/resources`, {
+        method: 'POST',
+        body: JSON.stringify({ name: payload.name, type: payload.type, url: payload.url }),
+      })
+    }
+
+    if (!res) {
+      return { success: false, error: 'No se pudo subir el recurso' }
+    }
 
     revalidatePath(`/projects/${projectId}`)
-    return { success: !!res, data: res }
+    return { success: true, data: res }
   } catch (error) {
     console.error(`Error al añadir recurso al proyecto ${projectId}:`, error)
-    return { success: false }
+    return { success: false, error: 'No se pudo subir el recurso' }
   }
 }
 

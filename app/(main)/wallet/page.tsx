@@ -1,15 +1,17 @@
-import { fetchAPI } from "@/lib/api";
-import WalletClient from "./WalletClient";
+import { getWalletBalance } from "@/lib/actions/wallet";
+import WalletClient, { WalletData } from "./WalletClient";
 
 export default async function WalletPage() {
-  let walletData = null;
+  const res = await getWalletBalance();
 
-  try {
-    walletData = await fetchAPI('/api/core/wallet');
-  } catch (error) {
-    console.error("El backend no está disponible para la Billetera:", error);
-  }
+  const initialData: WalletData | null = res.success
+    ? {
+        balance: res.coins ?? 0,
+        activePlanId: res.planId ?? 'free',
+        nextBillingDate: res.nextBillingDate ?? '—',
+        transactions: res.transactions ?? [],
+      }
+    : null;
 
-  return <WalletClient initialData={walletData} />;
+  return <WalletClient initialData={initialData} />;
 }
-

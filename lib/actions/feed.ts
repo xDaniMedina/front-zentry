@@ -21,6 +21,7 @@ type BackendPost = {
   likesCount: number
   commentsCount: number
   liked: boolean
+  saved: boolean
   createdAt: string
   updatedAt: string | null
 }
@@ -55,6 +56,7 @@ function mapBackendPost(p: BackendPost): PostType {
     comments: p.commentsCount || 0,
     tags: p.tools || [],
     liked: Boolean(p.liked),
+    saved: Boolean(p.saved),
   }
 }
 
@@ -68,14 +70,15 @@ function mapBackendComment(c: BackendComment): CommentItem {
   }
 }
 
-export async function getFeedPosts(): Promise<{ success: boolean; data?: PostType[]; error?: string }> {
+export async function getFeedPosts(page: number = 0): Promise<{ success: boolean; data?: PostType[]; hasMore?: boolean; error?: string }> {
   try {
-    const data = await fetchAPI('/api/core/posts')
+    const data = await fetchAPI(`/api/core/posts?page=${page}&size=20`)
     if (!data) {
       return { success: false, error: 'No se pudieron cargar los posts' }
     }
     const raw: BackendPost[] = data.content || data.data || (Array.isArray(data) ? data : [])
-    return { success: true, data: raw.map(mapBackendPost) }
+    const hasMore = typeof data.last === 'boolean' ? !data.last : false
+    return { success: true, data: raw.map(mapBackendPost), hasMore }
   } catch (error) {
     console.error('Error al obtener feed:', error)
     return { success: false, error: 'Error de conexión con el backend' }
@@ -130,6 +133,61 @@ export async function toggleLikePostAction(postId: string | number): Promise<{ s
     const message = error instanceof ApiError ? error.message : 'No se pudo dar me gusta'
     console.error('Error al dar me gusta:', error)
     return { success: false, error: message }
+  }
+}
+
+export async function toggleBookmarkAction(postId: string | number): Promise<{ success: boolean; saved?: boolean; error?: string }> {
+  try {
+    const res: { saved: boolean } | null = await fetchAPI(`/api/core/posts/${postId}/bookmark`, {
+      method: 'POST',
+    })
+    if (!res) {
+      return { success: false, error: 'No se pudo guardar la publicación' }
+    }
+    revalidatePath('/profile/[username]', 'page')
+    return { success: true, saved: res.saved }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo guardar la publicación'
+    console.error('Error al guardar publicación:', error)
+    return { success: false, error: message }
+  }
+}
+
+export async function getPostsByUsernameAction(username: string): Promise<{ success: boolean; data: PostType[]; error?: string }> {
+  try {
+    const res: BackendPost[] | null = await fetchAPI(`/api/core/posts/by-user/${encodeURIComponent(username)}`)
+    return { success: true, data: (res || []).map(mapBackendPost) }
+  } catch (error) {
+    console.error('Error al obtener publicaciones del usuario:', error)
+    return { success: false, data: [] }
+  }
+}
+
+export async function getLikedPostsAction(username: string): Promise<{ success: boolean; data: PostType[]; hidden?: boolean; error?: string }> {
+  try {
+    // fetchAPI convierte 401/403/404 en null; para este endpoint un null
+    // significa que el usuario decidió mantener privados sus "me gusta".
+    const res: BackendPost[] | null = await fetchAPI(`/api/core/posts/liked/${encodeURIComponent(username)}`)
+    if (res === null) {
+      return { success: true, data: [], hidden: true }
+    }
+    return { success: true, data: res.map(mapBackendPost) }
+  } catch (error) {
+    console.error('Error al obtener publicaciones con me gusta:', error)
+    return { success: false, data: [] }
+  }
+}
+
+export async function getSavedPostsAction(username: string): Promise<{ success: boolean; data: PostType[]; hidden?: boolean; error?: string }> {
+  try {
+    const res: BackendPost[] | null = await fetchAPI(`/api/core/posts/saved/${encodeURIComponent(username)}`)
+    if (res === null) {
+      return { success: true, data: [], hidden: true }
+    }
+    return { success: true, data: res.map(mapBackendPost) }
+  } catch (error) {
+    console.error('Error al obtener publicaciones guardadas:', error)
+    return { success: false, data: [] }
   }
 }
 

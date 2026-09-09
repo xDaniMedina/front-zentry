@@ -3,15 +3,16 @@
 import Link from 'next/link'
 import {
   Home, Wand2, Compass, LayoutGrid,
-  MessageSquare, Users, LogOut, Wallet, Flame, ArrowUpRight, ShoppingBag
+  MessageSquare, Users, LogOut, Wallet, Flame, ArrowUpRight, ShoppingBag, UserPlus
 } from 'lucide-react'
-import { useTheme } from '@/components/providers/ThemeProvider'
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import MissionsModal from './MissionsModal'
 import LogoutModal from '@/components/shared/LogoutModal'
 import { getUserStatsAction, UserSocialStats } from '@/lib/actions/friends'
+import { fetchDailyMissions } from '@/lib/actions/gamification'
+import { DailyMission } from '@/lib/gamification'
 import useSWR from 'swr'
 
 const NAV_ITEMS = [
@@ -20,15 +21,14 @@ const NAV_ITEMS = [
   { href: '/explore',     icon: Compass,       label: 'Explorar' },
   { href: '/projects',    icon: LayoutGrid,    label: 'Proyectos' },
   { href: '/messages',    icon: MessageSquare, label: 'Mensajes' },
+  { href: '/friends',     icon: UserPlus,      label: 'Amigos' },
   { href: '/shop',        icon: ShoppingBag,   label: 'Tienda ZC' },
   { href: '/communities', icon: Users,         label: 'Comunidades' },
 ]
 
 export default function LeftSidebar() {
-  const { theme, setTheme } = useTheme()
   const { user } = useAuth()
   const pathname = usePathname()
-  const [mounted, setMounted] = useState(false)
   const [isMissionsOpen, setIsMissionsOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
   const rawUsername = user?.username || user?.email || 'creador';
@@ -49,13 +49,20 @@ export default function LeftSidebar() {
 
   const posts = stats?.posts_count ?? user?.postsCount ?? 0;
   const followers = stats?.followers_count ?? user?.followersCount ?? 0;
-  const following = stats?.following_count ?? 0;
   const coins = stats?.zentry_coins ?? user?.zentry_coins ?? 100;
   const coinsToday = stats?.coins_today ?? Math.max(5, posts * 5);
 
+  const [completedMissionsToday, setCompletedMissionsToday] = useState(0);
+  const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
+  const isStreakOn = completedMissionsToday > 0;
+
   useEffect(() => {
-    const timer = setTimeout(() => setMounted(true), 0);
-    return () => clearTimeout(timer);
+    fetchDailyMissions().then(res => {
+      if (res.success) {
+        setCompletedMissionsToday(res.missions.filter(m => m.isClaimed).length);
+        setDailyMissions(res.missions);
+      }
+    });
   }, []);
 
   return (
@@ -113,12 +120,16 @@ export default function LeftSidebar() {
             <p className="text-xs font-extrabold text-amber-400">{coins}</p>
             <p className="text-[10px] text-zentry-text-2">coins</p>
           </Link>
-          <div className="hover:opacity-80 transition-opacity cursor-default flex flex-col items-center justify-center">
-            <p className="text-xs font-extrabold text-orange-400 flex items-center gap-0.5 justify-center">
-              <Flame className="w-3 h-3 text-orange-500" /> {stats?.current_streak || 0}
+          <button
+            onClick={() => setIsMissionsOpen(true)}
+            title={isStreakOn ? "Racha encendida: completaste una misión hoy" : "Completa una misión diaria para encender tu racha"}
+            className="hover:opacity-80 transition-opacity flex flex-col items-center justify-center cursor-pointer"
+          >
+            <p className={`text-xs font-extrabold flex items-center gap-0.5 justify-center ${isStreakOn ? 'text-orange-400' : 'text-zentry-text-2'}`}>
+              <Flame className={`w-3 h-3 ${isStreakOn ? 'text-orange-500' : 'text-zentry-text-2'}`} /> {isStreakOn ? 'ON' : 'OFF'}
             </p>
             <p className="text-[10px] text-zentry-text-2">racha</p>
-          </div>
+          </button>
         </div>
 
         {/* 1. TARJETA DE BILLETERA (DINÁMICA) */}
@@ -188,25 +199,24 @@ export default function LeftSidebar() {
           </h3>
 
           <div className="space-y-3 text-xs">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-zentry-text-2">Dar 5 likes hoy</span>
-                <span className="text-[10px] font-black text-amber-400">+5 ZC</span>
-              </div>
-              <div className="w-full bg-zentry-bg rounded-full h-1.5 overflow-hidden border border-zentry-border">
-                <div className="bg-orange-500 h-full rounded-full" style={{ width: '60%' }} />
-              </div>
-            </div>
-            
-            <div className="space-y-1 pt-1">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-zentry-text-2">Crear 1 obra en Estudio</span>
-                <span className="text-[10px] font-black text-amber-400">+25 ZC</span>
-              </div>
-              <div className="w-full bg-zentry-bg rounded-full h-1.5 overflow-hidden border border-zentry-border">
-                <div className="bg-orange-500 h-full rounded-full" style={{ width: '100%' }} />
-              </div>
-            </div>
+            {dailyMissions.length === 0 ? (
+              <p className="text-[11px] text-zentry-text-2">Cargando misiones...</p>
+            ) : (
+              dailyMissions.slice(0, 2).map((mission, i) => {
+                const pct = Math.min(100, Math.round((mission.currentProgress / Math.max(1, mission.targetProgress)) * 100));
+                return (
+                  <div key={mission.id} className={i > 0 ? "space-y-1 pt-1" : "space-y-1"}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-zentry-text-2 truncate pr-2">{mission.title}</span>
+                      <span className="text-[10px] font-black text-amber-400 shrink-0">+{mission.rewardCoins} ZC</span>
+                    </div>
+                    <div className="w-full bg-zentry-bg rounded-full h-1.5 overflow-hidden border border-zentry-border">
+                      <div className={`h-full rounded-full ${mission.isClaimed ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
