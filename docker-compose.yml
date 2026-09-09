@@ -1,0 +1,13 @@
+frontend:
+  build:
+    context: ./front-end
+    args:
+      NEXT_PUBLIC_API_URL: https://zentrycommunity.tail314909.ts.net:10000
+  container_name: zentry-frontend
+  restart: unless-stopped
+  depends_on:
+    - backend
+  environment:
+    NEXT_PUBLIC_API_URL: https://zentrycommunity.tail314909.ts.net:10000
+  ports:
+    - "3000:3000"
