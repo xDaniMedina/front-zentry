@@ -7,11 +7,12 @@ const nextConfig: NextConfig = {
       { protocol: 'http', hostname: '**' },
     ],
   },
+  output: 'standalone',
   async rewrites() {
     return [
       {
         source: '/uploads/:path*',
-        destination: 'http://localhost:8080/uploads/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/uploads/:path*`,
       },
     ];
   },
