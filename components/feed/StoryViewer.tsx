@@ -107,17 +107,21 @@ export default function StoryViewer({
     const step = (intervalTime / duration) * 100;
 
     const timer = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          nextStory();
-          return 0;
-        }
-        return prev + step;
-      });
+      setProgress(prev => Math.min(100, prev + step));
     }, intervalTime);
 
     return () => clearInterval(timer);
-  }, [isPaused, isHolding, currentStory, duration, nextStory]);
+  }, [isPaused, isHolding, currentStory, duration]);
+
+  // Avanzar a la siguiente historia cuando el progreso llega al 100%. Separado del
+  // intervalo de arriba: llamar a nextStory() (que puede terminar actualizando al
+  // padre vía onClose) dentro del actualizador de setProgress dispara el error de
+  // React "Cannot update a component while rendering a different component".
+  useEffect(() => {
+    if (progress >= 100) {
+      nextStory();
+    }
+  }, [progress, nextStory]);
 
   // Manejo de eventos de teclado (Escape, Flechas, Espacio)
   useEffect(() => {

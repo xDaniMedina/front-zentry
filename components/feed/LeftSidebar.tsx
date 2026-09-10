@@ -59,7 +59,7 @@ export default function LeftSidebar() {
   useEffect(() => {
     fetchDailyMissions().then(res => {
       if (res.success) {
-        setCompletedMissionsToday(res.missions.filter(m => m.isClaimed).length);
+        setCompletedMissionsToday(res.missions.filter(m => m.currentProgress >= m.targetProgress).length);
         setDailyMissions(res.missions);
       }
     });

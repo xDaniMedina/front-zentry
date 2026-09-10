@@ -124,9 +124,14 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   // Manejar cuando se ve una historia (marca cada ítem del grupo como visto en el backend)
   const handleStoryGroupViewed = (groupId: string | number) => {
     const group = storyGroups.find(g => g.id === groupId);
+    // Si ya estaba marcado como visto, no crear un objeto/array nuevo: el visor de
+    // historias vuelve a llamar esto en cada cambio de referencia de `currentGroup`,
+    // y actualizar sin condición aquí provocaba un bucle infinito de renders.
+    if (!group || !group.hasUnseen) return;
+
     setStoryGroups(prev => prev.map(g => g.id === groupId ? { ...g, hasUnseen: false } : g));
 
-    group?.items.forEach(item => {
+    group.items.forEach(item => {
       viewStoryAction(item.id);
     });
   };

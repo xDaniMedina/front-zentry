@@ -53,7 +53,7 @@ function MessagesInner() {
   const [isSending, startSendTransition] = useTransition();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { subscribeToConversation } = useConversationSocket(!!currentUserId);
+  const { connected, subscribeToConversation } = useConversationSocket(!!currentUserId);
 
   const friendById = useCallback(
     (id: number | null) => (id == null ? undefined : friends.find(f => Number(f.id) === id)),
@@ -126,7 +126,7 @@ function MessagesInner() {
       const res = await startDirectConversation(friendId);
       if (res.success && res.data) {
         const conv = resolveDisplay({ ...res.data, unreadCount: 0 } as Conversation);
-        setChats(prev => [conv, ...prev]);
+        setChats(prev => (prev.some(c => c.id === conv.id) ? prev : [conv, ...prev]));
         setActiveChatId(conv.id);
       } else {
         toast.error(res.error || "No se pudo iniciar la conversación");
@@ -171,7 +171,7 @@ function MessagesInner() {
     });
 
     return unsubscribe;
-  }, [activeChatId, subscribeToConversation, currentUserId]);
+  }, [activeChatId, subscribeToConversation, currentUserId, connected]);
 
   // Auto-scroll
   useEffect(() => {
@@ -190,7 +190,7 @@ function MessagesInner() {
     const res = await startDirectConversation(friendId);
     if (res.success && res.data) {
       const conv = resolveDisplay({ ...res.data, unreadCount: 0 } as Conversation);
-      setChats(prev => [conv, ...prev]);
+      setChats(prev => (prev.some(c => c.id === conv.id) ? prev : [conv, ...prev]));
       setActiveChatId(conv.id);
     } else {
       toast.error(res.error || "No se pudo iniciar la conversación");

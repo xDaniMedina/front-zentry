@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
+import {
   Bell, Users, Check, X, Flame, Settings, Shield,
   Moon, Sun, KeyRound, Palette, SlidersHorizontal, LogOut,
-  MessageSquare, Loader2, Zap
+  MessageSquare, Loader2, Zap, Bookmark, Heart
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -22,6 +22,8 @@ import {
   rejectFriendRequestAction,
   pingPresenceAction,
 } from "@/lib/actions/friends";
+import { getMyProfileAction } from "@/lib/actions/profile";
+import { updatePrivacySettings } from "@/lib/actions/settings";
 import { fetchDailyMissions } from "@/lib/actions/gamification";
 import { DailyMission } from "@/lib/gamification";
 import { getActiveAdsAction, AdDTO } from "@/lib/actions/ads";
@@ -51,6 +53,72 @@ export default function RightSidebar() {
   const [activeTab, setActiveTab] = useState<'profile' | 'privacy' | 'notifications' | 'appearance' | 'account'>('privacy');
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
+  // Privacidad real (persistida en el perfil del backend)
+  const [isPrivacyLoading, setIsPrivacyLoading] = useState(false);
+  const [isSavingPrivacy, setIsSavingPrivacy] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [showSavedPosts, setShowSavedPosts] = useState(true);
+  const [showLikedPosts, setShowLikedPosts] = useState(true);
+
+  // Notificaciones: preferencia local del dispositivo (no hay backend de push aún)
+  const [notifyLikes, setNotifyLikes] = useState(true);
+  const [notifyComments, setNotifyComments] = useState(true);
+  const [notifyMentions, setNotifyMentions] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(false);
+
+  useEffect(() => {
+    if (!showSettingsDrawer) return;
+
+    setIsPrivacyLoading(true);
+    getMyProfileAction().then(res => {
+      if (res.success && res.data) {
+        setIsPrivate(Boolean(res.data.isPrivate));
+        setShowSavedPosts(res.data.showSavedPosts !== false);
+        setShowLikedPosts(res.data.showLikedPosts !== false);
+      }
+      setIsPrivacyLoading(false);
+    });
+
+    try {
+      const savedPrefs = JSON.parse(localStorage.getItem('zentry_notification_prefs') || '{}');
+      if (typeof savedPrefs.notifyLikes === 'boolean') setNotifyLikes(savedPrefs.notifyLikes);
+      if (typeof savedPrefs.notifyComments === 'boolean') setNotifyComments(savedPrefs.notifyComments);
+      if (typeof savedPrefs.notifyMentions === 'boolean') setNotifyMentions(savedPrefs.notifyMentions);
+      if (typeof savedPrefs.notifyEmail === 'boolean') setNotifyEmail(savedPrefs.notifyEmail);
+    } catch { /* localStorage no disponible o corrupto: usar valores por defecto */ }
+  }, [showSettingsDrawer]);
+
+  const handleTogglePrivacy = async (field: 'isPrivate' | 'showSavedPosts' | 'showLikedPosts', value: boolean) => {
+    const prev = { isPrivate, showSavedPosts, showLikedPosts };
+    if (field === 'isPrivate') setIsPrivate(value);
+    if (field === 'showSavedPosts') setShowSavedPosts(value);
+    if (field === 'showLikedPosts') setShowLikedPosts(value);
+
+    setIsSavingPrivacy(true);
+    const res = await updatePrivacySettings({
+      isPrivate: field === 'isPrivate' ? value : isPrivate,
+      showSavedPosts: field === 'showSavedPosts' ? value : showSavedPosts,
+      showLikedPosts: field === 'showLikedPosts' ? value : showLikedPosts,
+    });
+    setIsSavingPrivacy(false);
+
+    if (!res.success) {
+      setIsPrivate(prev.isPrivate);
+      setShowSavedPosts(prev.showSavedPosts);
+      setShowLikedPosts(prev.showLikedPosts);
+      toast.error(res.message || "No se pudo actualizar tu privacidad");
+    } else {
+      toast.success("Preferencia de privacidad actualizada");
+    }
+  };
+
+  const persistNotificationPrefs = (next: Partial<{ notifyLikes: boolean; notifyComments: boolean; notifyMentions: boolean; notifyEmail: boolean }>) => {
+    try {
+      const current = { notifyLikes, notifyComments, notifyMentions, notifyEmail, ...next };
+      localStorage.setItem('zentry_notification_prefs', JSON.stringify(current));
+    } catch { /* ignore */ }
+  };
+
 
   // Carga de misiones diarias reales tras montaje (definen si la racha está encendida)
   useEffect(() => {
@@ -62,7 +130,7 @@ export default function RightSidebar() {
     });
   }, [cleanUsername]);
 
-  const completedMissionsToday = dailyMissions.filter(m => m.isClaimed).length;
+  const completedMissionsToday = dailyMissions.filter(m => m.currentProgress >= m.targetProgress).length;
   const totalDailyMissions = dailyMissions.length;
   const isStreakOn = completedMissionsToday > 0;
 
@@ -386,14 +454,88 @@ export default function RightSidebar() {
                 </div>
 
                 {activeTab === 'privacy' && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between">
-                      <div>
-                        <h4 className="font-extrabold text-sm text-zentry-text-1">Cuenta Pública</h4>
-                        <p className="text-xs text-zentry-text-2">Cualquier creador puede ver tus proyectos y enviarte mensajes.</p>
-                      </div>
-                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">Activo</span>
+                  isPrivacyLoading ? (
+                    <div className="flex items-center justify-center py-10 text-zentry-text-2 gap-2 text-xs">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Cargando privacidad...
                     </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between">
+                        <div>
+                          <h4 className="font-extrabold text-sm text-zentry-text-1">Cuenta Privada</h4>
+                          <p className="text-xs text-zentry-text-2">Tu perfil seguirá visible, pero se identificará como privado para otros creadores.</p>
+                        </div>
+                        <button
+                          onClick={() => handleTogglePrivacy('isPrivate', !isPrivate)}
+                          disabled={isSavingPrivacy}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${isPrivate ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isPrivate ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                      </div>
+
+                      <div className="p-4 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-2">
+                          <Bookmark className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                          <div>
+                            <h4 className="font-extrabold text-sm text-zentry-text-1">Mostrar mis Guardados</h4>
+                            <p className="text-xs text-zentry-text-2">Otros creadores podrán ver tu colección de guardados.</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleTogglePrivacy('showSavedPosts', !showSavedPosts)}
+                          disabled={isSavingPrivacy}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${showSavedPosts ? 'bg-amber-500' : 'bg-zentry-border'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showSavedPosts ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                      </div>
+
+                      <div className="p-4 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-2">
+                          <Heart className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                          <div>
+                            <h4 className="font-extrabold text-sm text-zentry-text-1">Mostrar mis Me Gusta</h4>
+                            <p className="text-xs text-zentry-text-2">Otros creadores podrán ver lo que marcaste con me gusta.</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleTogglePrivacy('showLikedPosts', !showLikedPosts)}
+                          disabled={isSavingPrivacy}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 disabled:opacity-50 ${showLikedPosts ? 'bg-rose-500' : 'bg-zentry-border'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showLikedPosts ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {activeTab === 'notifications' && (
+                  <div className="space-y-4">
+                    {[
+                      { key: 'notifyLikes' as const, state: notifyLikes, setState: setNotifyLikes, title: 'Me Gusta', desc: 'Alerta cuando alguien reaccione a tus obras' },
+                      { key: 'notifyComments' as const, state: notifyComments, setState: setNotifyComments, title: 'Comentarios', desc: 'Alerta cuando alguien comente tu publicación' },
+                      { key: 'notifyMentions' as const, state: notifyMentions, setState: setNotifyMentions, title: 'Menciones y Etiquetas', desc: 'Cuando te mencionen en un post o comentario' },
+                      { key: 'notifyEmail' as const, state: notifyEmail, setState: setNotifyEmail, title: 'Resumen por Correo', desc: 'Resumen semanal de tendencias por email' },
+                    ].map((item) => (
+                      <div key={item.key} className="p-4 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="font-extrabold text-sm text-zentry-text-1">{item.title}</h4>
+                          <p className="text-xs text-zentry-text-2">{item.desc}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const next = !item.state;
+                            item.setState(next);
+                            persistNotificationPrefs({ [item.key]: next });
+                          }}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${item.state ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.state ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 
