@@ -13,7 +13,7 @@ import { FeedCard, PostType } from "@/components/feed/FeedCard"
 import CreatePostModal from "@/components/feed/CreatePostModal"
 import { 
   X, Send, Sparkles, Image as ImageIcon, Video, Music, 
-  FileText, MessageSquare, Loader2
+  FileText, MessageSquare, Loader2, Radio, Bell, Tv, Users as UsersIcon
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
@@ -443,8 +443,72 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
         <FeedLayoutControls layout={layoutStyle} setLayout={setLayoutStyle} />
       </div>
 
-      {/* 5. Flujo Principal de Publicaciones */}
-      {filteredPosts.length === 0 ? (
+            {/* 5. Flujo Principal de Publicaciones O Sección En Vivo */}
+      {activeTab === 'en_vivo' ? (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-red-950/40 via-purple-950/30 to-zentry-card border border-red-500/30 rounded-3xl p-8 relative overflow-hidden text-center sm:text-left">
+            <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+              <Radio className="w-64 h-64 text-red-500" />
+            </div>
+            
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/40 rounded-full text-red-400 text-xs font-black uppercase tracking-wider mb-4">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              Próxima Funcionalidad
+            </div>
+
+            <h2 className="text-2xl sm:text-3xl font-black text-white mb-2 tracking-tight">
+              Zentry Live: Transmisiones En Vivo
+            </h2>
+            <p className="text-sm text-zentry-text-2 max-w-xl mb-6 leading-relaxed">
+              Muy pronto podrás transmitir tu proceso creativo en tiempo real, realizar talleres interactivos, sesiones de feedback en vivo y conectar directamente con tu comunidad de creadores.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+              <button
+                onClick={() => toast.success("¡Te hemos anotado! Te avisaremos el día del lanzamiento oficial de Zentry Live.")}
+                className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-extrabold rounded-2xl text-xs flex items-center gap-2 shadow-lg shadow-red-500/20 transition-all cursor-pointer"
+              >
+                <Bell className="w-4 h-4" /> Notificarme del Lanzamiento
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-zentry-card border border-zentry-border/80 rounded-3xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                <Tv className="w-5 h-5" />
+              </div>
+              <h4 className="font-extrabold text-sm text-zentry-text-1">Workshops & Masterclasses</h4>
+              <p className="text-xs text-zentry-text-2 leading-relaxed">
+                Aprende de artistas destacados en sesiones interactivas de ilustración, 3D y diseño.
+              </p>
+            </div>
+
+            <div className="bg-zentry-card border border-zentry-border/80 rounded-3xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                <Radio className="w-5 h-5" />
+              </div>
+              <h4 className="font-extrabold text-sm text-zentry-text-1">Stream de Proceso Creativo</h4>
+              <p className="text-xs text-zentry-text-2 leading-relaxed">
+                Muestra tu flujo de trabajo en vivo mientras interactúas por chat con tus seguidores.
+              </p>
+            </div>
+
+            <div className="bg-zentry-card border border-zentry-border/80 rounded-3xl p-5 space-y-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h4 className="font-extrabold text-sm text-zentry-text-1">Monetización en Vivo</h4>
+              <p className="text-xs text-zentry-text-2 leading-relaxed">
+                Recibe apoyos directos y donaciones de tu audiencia durante tus transmisiones.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : filteredPosts.length === 0 ? (
         <div className="text-center py-16 px-4 bg-zentry-card border border-zentry-border rounded-3xl space-y-3">
           <Sparkles className="w-12 h-12 text-zentry-accent mx-auto opacity-50" />
           <h3 className="text-base font-extrabold text-zentry-text-1">No hay publicaciones en esta categoría</h3>

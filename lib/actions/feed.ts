@@ -3,6 +3,7 @@
 import { fetchAPI, ApiError } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
 import { PostType, CommentItem } from '@/components/feed/FeedCard'
+import { getImageUrl } from '@/lib/utils'
 
 type BackendPost = {
   id: number
@@ -15,6 +16,7 @@ type BackendPost = {
   content_type: string | null
   thumbnail_url: string | null
   image_url: string | null
+  mediaUrls?: string[] | null
   visibility: string
   communityId: number | null
   tools: string[] | null
@@ -37,21 +39,38 @@ type BackendComment = {
 }
 
 function mapBackendPost(p: BackendPost): PostType {
-  const mediaType = (p.content_type === 'image' || p.content_type === 'video' || p.content_type === 'audio' || p.content_type === 'text')
-    ? p.content_type
-    : 'text'
+  const rawUrl = p.image_url || p.thumbnail_url || (p.mediaUrls && p.mediaUrls.length > 0 ? p.mediaUrls[0] : undefined);
+  const mediaUrl = rawUrl ? getImageUrl(rawUrl) : undefined;
+  const avatarUrl = p.authorAvatar ? getImageUrl(p.authorAvatar) : undefined;
+
+  let mediaType = p.content_type || 'image';
+
+  if (rawUrl) {
+    const lowerUrl = rawUrl.toLowerCase();
+    if (lowerUrl.match(/\.(mp4|webm|mov|mkv)(\?|$)/i) || lowerUrl.startsWith('data:video/')) {
+      mediaType = 'video';
+    } else if (lowerUrl.match(/\.(mp3|wav|ogg|m4a|aac)(\?|$)/i) || lowerUrl.startsWith('data:audio/')) {
+      mediaType = 'audio';
+    } else if (lowerUrl.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp)(\?|$)/i) || lowerUrl.startsWith('data:image/')) {
+      mediaType = 'image';
+    }
+  }
+
+  if (mediaType !== 'image' && mediaType !== 'video' && mediaType !== 'audio' && mediaType !== 'text') {
+    mediaType = rawUrl ? 'image' : 'text';
+  }
 
   return {
     id: p.id,
     author: p.authorName || p.authorUsername || 'Creador Zentry',
     handle: `@${p.authorUsername || 'creador'}`,
-    avatar_url: p.authorAvatar || undefined,
+    avatar_url: avatarUrl,
     discipline: p.authorDiscipline || undefined,
     created_at: p.createdAt,
     title: p.title,
     description: p.contenido || undefined,
-    media_type: mediaType,
-    media_url: p.image_url || p.thumbnail_url || undefined,
+    media_type: mediaType as 'image' | 'video' | 'audio' | 'text',
+    media_url: mediaUrl,
     likes: p.likesCount || 0,
     comments: p.commentsCount || 0,
     tags: p.tools || [],
@@ -165,8 +184,6 @@ export async function getPostsByUsernameAction(username: string): Promise<{ succ
 
 export async function getLikedPostsAction(username: string): Promise<{ success: boolean; data: PostType[]; hidden?: boolean; error?: string }> {
   try {
-    // fetchAPI convierte 401/403/404 en null; para este endpoint un null
-    // significa que el usuario decidió mantener privados sus "me gusta".
     const res: BackendPost[] | null = await fetchAPI(`/api/core/posts/liked/${encodeURIComponent(username)}`)
     if (res === null) {
       return { success: true, data: [], hidden: true }

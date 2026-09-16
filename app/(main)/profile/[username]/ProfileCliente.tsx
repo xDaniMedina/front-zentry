@@ -262,8 +262,8 @@ export default function ProfileClient({ initialData, username }: { initialData: 
           onClick={isCurrentUser ? () => setIsEditModalOpen(true) : undefined}
           className={`w-full h-32 sm:h-48 bg-zentry-card border border-zentry-border rounded-3xl overflow-hidden relative group ${isCurrentUser ? 'cursor-pointer' : ''}`}
         >
-          {profile.bannerUrl ? (
-            <Image src={getImageUrl(profile.bannerUrl)} alt="Portada" fill sizes="800px" className="object-cover" />
+          {(profile.bannerUrl || (profile as any).banner_url) ? (
+            <Image src={getImageUrl(profile.bannerUrl || (profile as any).banner_url)} alt="Portada" fill sizes="800px" className="object-cover" />
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-purple-600/40 to-blue-600/40" />
           )}
@@ -275,8 +275,8 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         </div>
         <div className="absolute -bottom-10 left-6 sm:left-10 group cursor-pointer">
           <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-zentry-bg bg-zentry-card flex items-center justify-center text-3xl sm:text-4xl font-bold text-zentry-text-1 relative overflow-hidden">
-            {profile.avatarUrl ? (
-              <Image src={getImageUrl(profile.avatarUrl)} alt={profile.name} fill sizes="128px" className="object-cover" />
+            {(profile.avatarUrl || (profile as any).avatar_url) ? (
+              <Image src={getImageUrl(profile.avatarUrl || (profile as any).avatar_url)} alt={profile.name} fill sizes="128px" className="object-cover" />
             ) : (
               (profile.name || profile.username || "DA").substring(0, 2).toUpperCase()
             )}

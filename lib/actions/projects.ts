@@ -264,7 +264,12 @@ export async function addTaskAction(
   }
 }
 
-export const addProjectTaskAction = addTaskAction;
+export async function addProjectTaskAction(
+  projectId: Parameters<typeof addTaskAction>[0],
+  payload: Parameters<typeof addTaskAction>[1]
+) {
+  return addTaskAction(projectId, payload)
+}
 
 export async function toggleTaskAction(
   projectId: string | number,
@@ -295,7 +300,13 @@ export async function toggleTaskAction(
   }
 }
 
-export const toggleProjectTaskAction = toggleTaskAction;
+export async function toggleProjectTaskAction(
+  projectId: string | number,
+  taskId: string | number,
+  completed?: boolean
+) {
+  return toggleTaskAction(projectId, taskId, completed)
+}
 
 export async function deleteTaskAction(
   projectId: string | number,

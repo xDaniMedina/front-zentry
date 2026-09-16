@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useTransition, ElementType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
-  MousePointer2, PenTool, Eraser, 
+  MousePointer2, Send, PenTool, Eraser, 
   Layers, Download, Save, ArrowLeft, ZoomIn, ZoomOut, 
   Play, Pause, Scissors, SlidersHorizontal, Image as ImageIcon,
   Music, Video, Loader2, CheckCircle2, Grid, Trash2, RotateCw, AlignLeft, AlignCenter, 
@@ -13,7 +13,8 @@ import {
   Undo2, Redo2, Plus, Check
 } from "lucide-react";
 import { toast } from "sonner";
-import { createStudioProjectAction, updateStudioProjectAction } from "@/lib/actions/studio";
+import { createStudioProjectAction, updateStudioProjectAction, publishStudioProjectAction } from "@/lib/actions/studio";
+import { createPostAction } from "@/lib/actions/feed";
 import { getImageUrl } from "@/lib/utils";
 import { StudioProject } from "@/types";
 
@@ -45,6 +46,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
   const [title, setTitle] = useState(initialTitleValue);
   const [zoom, setZoom] = useState<number>(initialProject?.metadata?.zoom || 100);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>(fileType === 'image' ? 'filtros' : 'capas');
   const [, startTransition] = useTransition();
@@ -507,6 +509,83 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
         toast.error(res.error || "No se pudo guardar el proyecto");
       }
     });
+  };
+
+  
+  const handlePublish = async () => {
+    setIsPublishing(true);
+    try {
+      const isImageOrCanvas = fileType === 'canvas' || fileType === 'image';
+      const dataUrl = isImageOrCanvas ? getExportDataUrl() : undefined;
+      const type = fileType as StudioProject['type'];
+      const isNumeric = !isNaN(Number(currentProjectId)) && Number(currentProjectId) > 0;
+
+      let targetProjectId = currentProjectId;
+
+      // 1. Guardar primero la versión más reciente del proyecto
+      const saveRes = isNumeric
+        ? await updateStudioProjectAction(currentProjectId, {
+            title,
+            type,
+            content: fileType === 'document' ? docContent : undefined,
+            metadata: buildMetadata(),
+            imageDataUrl: dataUrl,
+          })
+        : await createStudioProjectAction({
+            title,
+            type,
+            content: fileType === 'document' ? docContent : undefined,
+            metadata: buildMetadata(),
+            imageDataUrl: dataUrl,
+          });
+
+      if (saveRes.success && saveRes.data) {
+        targetProjectId = String(saveRes.data.id);
+        if (targetProjectId !== currentProjectId) {
+          setCurrentProjectId(targetProjectId);
+          window.history.replaceState(null, '', `/studio/${targetProjectId}`);
+        }
+      }
+
+      // 2. Publicar utilizando el endpoint del estudio si tenemos ID numérico
+      if (!isNaN(Number(targetProjectId)) && Number(targetProjectId) > 0) {
+        const pubRes = await publishStudioProjectAction(targetProjectId);
+        if (pubRes.success) {
+          toast.success("🚀 ¡Tu obra ha sido publicada exitosamente en el Feed principal!");
+          router.push('/feed');
+          return;
+        }
+      }
+
+      // 3. Fallback directo al feed mediante createPostAction
+      const contentTypeMap: Record<string, 'image' | 'video' | 'audio' | 'text'> = {
+        canvas: 'image',
+        image: 'image',
+        video: 'video',
+        audio: 'audio',
+        document: 'text',
+      };
+
+      const postRes = await createPostAction({
+        title: title || 'Creación del Estudio Zentry',
+        description: fileType === 'document' ? docContent : `Obra de ${fileType} creada en el Estudio Zentry`,
+        contentType: contentTypeMap[fileType] || 'image',
+        mediaUrl: dataUrl || initialProject?.thumbnail_url || undefined,
+        tags: ['#EstudioZentry', `#${fileType.toUpperCase()}`],
+      });
+
+      if (postRes.success) {
+        toast.success("🚀 ¡Tu obra ha sido publicada exitosamente en el Feed principal!");
+        router.push('/feed');
+      } else {
+        toast.error(postRes.error || "No se pudo publicar la obra en el feed");
+      }
+    } catch (error) {
+      console.error("Error al publicar la obra:", error);
+      toast.error("Ocurrió un error al intentar publicar en el feed");
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const handleExport = () => {
@@ -1195,6 +1274,16 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             {isSaving ? 'Guardando...' : saved ? 'Guardado' : 'Guardar'}
+          </button>
+
+          <button 
+            onClick={handlePublish}
+            disabled={isPublishing}
+            className="flex items-center gap-2 text-xs font-black px-4.5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 transition-transform active:scale-95 disabled:opacity-50 cursor-pointer"
+            title="Publicar esta obra directamente en el Feed principal"
+          >
+            {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isPublishing ? 'Publicando...' : 'Publicar'}
           </button>
         </div>
       </div>

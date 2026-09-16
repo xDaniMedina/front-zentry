@@ -56,7 +56,11 @@ export default function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div 
+        <motion.div 
+          key="logout-modal"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           onClick={() => !isLoggingOut && onClose()}
           className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
         >
@@ -106,12 +110,13 @@ export default function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
               </button>
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
 
       {/* PANTALLA ANIMADA DE SALIDA EN PANTALLA COMPLETA */}
       {isLoggingOut && (
         <motion.div
+          key="logout-loading-screen"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

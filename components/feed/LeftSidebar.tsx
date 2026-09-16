@@ -121,6 +121,7 @@ export default function LeftSidebar() {
             <p className="text-[10px] text-zentry-text-2">coins</p>
           </Link>
           <button
+            suppressHydrationWarning
             onClick={() => setIsMissionsOpen(true)}
             title={isStreakOn ? "Racha encendida: completaste una misión hoy" : "Completa una misión diaria para encender tu racha"}
             className="hover:opacity-80 transition-opacity flex flex-col items-center justify-center cursor-pointer"
