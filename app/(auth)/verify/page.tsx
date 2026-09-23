@@ -81,7 +81,7 @@ function VerifyOTPContent() {
       if (response.ok && data.token) {
         loginState({ username: data.username, id: data.id, email: emailParam });
         toast.success("¡Cuenta verificada exitosamente!");
-        router.push("/feed");
+        router.push("/onboarding");
       } else {
         toast.error(data.message || "Código incorrecto o expirado");
       }

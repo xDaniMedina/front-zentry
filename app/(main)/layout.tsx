@@ -1,3 +1,4 @@
+import PresencePing from "@/components/shared/PresencePing";
 import LeftSidebar from "@/components/feed/LeftSidebar";
 import RightSidebar from "@/components/feed/RightSidebar";
 
@@ -13,7 +14,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
         {/* 2. CONTENIDO CENTRAL: Fluido con diseño adaptable y sin compresión de bordes */}
         <main className="flex-1 w-full min-w-0 max-w-7xl mx-auto overflow-x-hidden bg-zentry-bg px-3 sm:px-6 lg:px-8 pb-24 md:pb-8">
-          {children}
+          <PresencePing />
+        {children}
         </main>
 
         {/* 3. BARRA DERECHA: Oculta en móvil y tablet (<1200px / xl), visible en pantallas grandes */}

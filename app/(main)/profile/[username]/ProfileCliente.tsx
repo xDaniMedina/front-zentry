@@ -1,4 +1,7 @@
 "use client"
+import { getEquippedItemsAction, getStoreCatalogAction } from "@/lib/actions/shop";
+import { rarityRingClass } from "@/lib/shop";
+import useSWR from "swr";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -88,6 +91,16 @@ export default function ProfileClient({ initialData, username }: { initialData: 
   const [ownPosts, setOwnPosts] = useState<PostType[]>([]);
   const [savedPosts, setSavedPosts] = useState<PostType[]>([]);
   const [savedHidden, setSavedHidden] = useState(false);
+
+  const { data: equippedRes } = useSWR('equippedItems', getEquippedItemsAction);
+  const { data: catalogRes } = useSWR('storeCatalog', getStoreCatalogAction);
+  const equipped = equippedRes?.equipped || {};
+  const storeItems = catalogRes?.items || [];
+
+  const equippedFrameItem = storeItems.find(i => Number(i.id) === Number(equipped.frames));
+  const equippedPetItem = storeItems.find(i => Number(i.id) === Number(equipped.pets));
+  const equippedTitleItem = storeItems.find(i => Number(i.id) === Number(equipped.titles));
+
   const [likedPosts, setLikedPosts] = useState<PostType[]>([]);
   const [likedHidden, setLikedHidden] = useState(false);
 
@@ -274,7 +287,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
           )}
         </div>
         <div className="absolute -bottom-10 left-6 sm:left-10 group cursor-pointer">
-          <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-zentry-bg bg-zentry-card flex items-center justify-center text-3xl sm:text-4xl font-bold text-zentry-text-1 relative overflow-hidden">
+          <div className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-zentry-bg bg-zentry-card flex items-center justify-center text-3xl sm:text-4xl font-bold text-zentry-text-1 relative overflow-hidden ${equippedFrameItem ? rarityRingClass(equippedFrameItem.rarity) : ""}`}>
             {(profile.avatarUrl || (profile as any).avatar_url) ? (
               <Image src={getImageUrl(profile.avatarUrl || (profile as any).avatar_url)} alt={profile.name} fill sizes="128px" className="object-cover" />
             ) : (
@@ -288,6 +301,11 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                 <Edit3 className="w-5 h-5" />
               </div>
             )}
+            {equippedPetItem && (
+              <span className="absolute -bottom-1 -right-1 text-2xl sm:text-3xl filter drop-shadow-md animate-bounce z-10" title={`Mascota: ${equippedPetItem.name}`}>
+                {equippedPetItem.icon}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -296,7 +314,14 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       <div className="px-2 sm:px-4 mb-8">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-zentry-text-1">{profile.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold text-zentry-text-1">{profile.name}</h1>
+              {equippedTitleItem && (
+                <span className="text-xs font-bold text-purple-300 bg-purple-950/80 px-2.5 py-0.5 rounded-md border border-purple-500/30">
+                  {equippedTitleItem.icon} {equippedTitleItem.name}
+                </span>
+              )}
+            </div>
             <p className="text-zentry-text-2">@{profile.username} • {profile.discipline}</p>
           </div>
           

@@ -13,7 +13,7 @@ import { FeedCard, PostType } from "@/components/feed/FeedCard"
 import CreatePostModal from "@/components/feed/CreatePostModal"
 import { 
   X, Send, Sparkles, Image as ImageIcon, Video, Music, 
-  FileText, MessageSquare, Loader2, Radio, Bell, Tv, Users as UsersIcon
+  FileText, MessageSquare, Loader2, Radio, Bell, Tv
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"

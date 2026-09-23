@@ -41,6 +41,14 @@ export default function LogoutModal({ isOpen, onClose }: LogoutModalProps) {
   }, [isOpen, mounted, isLoggingOut, onClose]);
 
   const handleConfirmLogout = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        navigator.sendBeacon(`${apiUrl}/api/core/friends/presence/ping?status=offline`);
+      } else {
+        await fetch(`${apiUrl}/api/core/friends/presence/ping?status=offline`, { method: 'POST', keepalive: true }).catch(() => {});
+      }
+    } catch {}
     setIsLoggingOut(true);
     try {
       localStorage.removeItem("zentry_user");

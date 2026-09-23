@@ -46,7 +46,8 @@ export default function ShopClient() {
   const handleToggleEquip = async (item: ShopItem) => {
     const res = await equipShopItemAction(item.id);
     if (res.success) {
-      if (res.equipped) mutateEquipped({ success: true, equipped: res.equipped }, { revalidate: false });
+      await mutateEquipped();
+      await mutateCatalog();
       toast.success(`Cambios aplicados para "${item.name}".`);
     } else {
       toast.error(res.message || "Error al equipar");
@@ -156,7 +157,7 @@ export default function ShopClient() {
       {/* 3. GRID DE ARTÍCULOS DE LA TIENDA */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
         {filteredItems.map(item => {
-          const isEquipped = Object.values(equipped).includes(item.id);
+          const isEquipped = Boolean(equipped && (equipped[item.category] === item.id || Object.values(equipped).map(Number).includes(Number(item.id))));
 
           const rarityStyles = {
             common: 'border-zinc-800 bg-[#12121e]',

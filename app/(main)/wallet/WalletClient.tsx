@@ -41,52 +41,56 @@ const EMPTY_WALLET: WalletData = {
 
 const PLANS: SubscriptionPlan[] = [
   {
-    id: 'free',
-    name: 'Zentry Free',
-    tagline: 'Para creadores casuales y exploradores',
+    id: 'gratuito',
+    name: 'Gratuito',
+    tagline: 'Crear perfil y explorar la comunidad',
     monthlyCost: 0,
     annualCost: 0,
-    color: 'from-gray-800 to-gray-900 border-zentry-border',
+    color: 'from-zinc-800 to-zinc-900 border-zinc-700',
     features: [
-      'Acceso básico al Estudio (1 proyecto activo)',
-      'Exportación en resolución estándar (720p/HD)',
-      'Soporte comunitario',
-      'Comisión del 10% en ventas de obras'
+      'Crear y personalizar tu perfil',
+      'Publicar contenido e inspiraciones',
+      'Explorar artistas y portafolios',
+      'Unirse a comunidades públicas',
+      'Interacción social básica (likes, comentarios)'
     ]
   },
   {
-    id: 'pro',
-    name: 'Zentry PRO',
-    tagline: 'Experiencia ilimitada para creadores digitales',
-    monthlyCost: 15,
-    annualCost: 12,
-    badge: 'MÁS POPULAR ⚡',
+    id: 'premium_creador',
+    name: 'Premium Creador',
+    tagline: 'Mayor alcance, monetización y herramientas profesionales',
+    monthlyCost: 9.99,
+    annualCost: 7.99,
+    badge: 'MÁS POPULAR ⭐',
     isPopular: true,
-    color: 'from-purple-900/60 via-zentry-card to-blue-900/60 border-zentry-accent',
+    color: 'from-purple-950 via-[#161426] to-indigo-950 border-purple-500/80',
     features: [
-      'Proyectos e Historias Ilimitadas (Canva / Word)',
-      'Exportación en 4K Ultra HD sin marca de agua',
-      'Insignia de Creador Verificado ⚡ en tu perfil',
-      '+500 ZC de bonificación de registro mensual',
-      '0% de comisiones por venta en la plataforma',
-      'Acceso a plantillas exclusivas y herramientas de IA'
+      'Mayor alcance y visibilidad en el feed',
+      'Monetización directa de contenido',
+      'Más Zentry Coins diarias (+50% bonus)',
+      'Estadísticas y analíticas avanzadas',
+      'Herramientas profesionales desbloqueadas',
+      'Colaboración directa con marcas y proyectos',
+      'Perfil con Insignia de Verificado ✓',
+      'Acceso anticipado a futuras funciones'
     ]
   },
   {
-    id: 'vip',
-    name: 'Studio VIP',
-    tagline: 'Para estudios profesionales y equipos creativos',
-    monthlyCost: 45,
-    annualCost: 36,
-    badge: 'RECOMENDADO VIP 👑',
-    color: 'from-amber-900/60 via-zentry-card to-purple-900/60 border-amber-500/80',
+    id: 'premium_pro',
+    name: 'Premium PRO',
+    tagline: 'Suite completa con IA, colaboraciones exclusivas y promoción',
+    monthlyCost: 19.99,
+    annualCost: 15.99,
+    badge: 'SUITE COMPLETA IA 🚀',
+    color: 'from-amber-950 via-[#1c160e] to-purple-950 border-amber-500/80',
     features: [
-      'Todo lo incluido en el Plan Zentry PRO',
-      'Editor de Video & Audio ilimitado (YouTube Studio / DAW)',
-      'Insignia Dorada VIP 👑 en tu perfil y comentarios',
-      'Espacios de trabajo colaborativos (hasta 5 miembros)',
-      'Soporte prioritario 24/7 con atención personalizada',
-      'Remezclas ilimitadas y derechos comerciales completos'
+      'Todo lo incluido en el Plan Creador',
+      'Herramientas avanzadas potenciadas con IA',
+      'Colaboraciones exclusivas de alto nivel',
+      'Acceso prioritario a eventos y concursos',
+      'Bolsa mensual máxima de Zentry Coins',
+      'Promoción destacada en la portada de Zentry',
+      'Soporte técnico y creativo dedicado 24/7'
     ]
   }
 ];
