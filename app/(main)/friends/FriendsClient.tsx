@@ -129,7 +129,7 @@ export default function FriendsClient({ initialFriends, initialPending, initialS
   const renderCard = (person: FriendUser | UserDTO, actions: React.ReactNode, key: string) => {
     const name = person.name || person.username;
     const username = person.username;
-    const avatarUrl = 'avatar_url' in person ? person.avatar_url : undefined;
+    const avatarUrl = 'avatar_url' in person ? person.avatar_url : 'avatarUrl' in person ? person.avatarUrl : undefined;
 
     return (
       <div key={key} className="bg-zentry-card border border-zentry-border rounded-2xl p-4 flex items-center gap-3 shadow-sm">

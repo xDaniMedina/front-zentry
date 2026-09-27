@@ -1,5 +1,6 @@
 "use client"
 
+import { REACTIONS } from "@/lib/reactions";
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -20,11 +21,13 @@ interface StoryViewerProps {
   onClose: () => void;
   onStoryGroupViewed?: (groupId: string | number) => void;
   onLikeStory?: (storyId: string, groupId: string | number) => void;
+  onReactStory?: (storyId: string, groupId: string | number, type: string) => void;
   onSendReply?: (groupId: string | number, storyId: string, message: string) => void;
   onDeleteStory?: (storyId: string, groupId: string | number) => void;
 }
 
-const QUICK_REACTIONS = ["🔥", "❤️", "😂", "😮", "😢", "👏", "🎉"];
+// Mismo catálogo que las obras: cada reacción se guarda y notifica al dueño de la historia
+const QUICK_REACTIONS = REACTIONS;
 
 interface Particle {
   id: number;
@@ -41,6 +44,7 @@ export default function StoryViewer({
   onClose,
   onStoryGroupViewed,
   onLikeStory,
+  onReactStory,
   onSendReply,
   onDeleteStory
 }: StoryViewerProps) {
@@ -156,13 +160,19 @@ export default function StoryViewer({
       setParticles(prev => prev.filter(p => !newParticles.some(np => np.id === p.id)));
     }, 1200);
 
-    toast(`Reaccionaste con ${emoji}`, {
-      duration: 1500,
-      icon: emoji
-    });
+  };
 
-    if (onSendReply && currentStory) {
-      onSendReply(currentGroup.id, currentStory.id, emoji);
+  // Reacción rápida: se guarda como reacción real (no como mensaje)
+  const handleQuickReaction = (type: string, emoji: string) => {
+    if (!currentStory) return;
+    const isSame = (currentStory.myReaction ?? (likedMap[currentStory.id] ? 'like' : null)) === type;
+    if (!isSame) triggerReaction(emoji);
+    toast(isSame ? 'Reacción quitada' : `Reaccionaste con ${emoji}`, { duration: 1500, icon: isSame ? undefined : emoji });
+    setLikedMap(prev => ({ ...prev, [currentStory.id]: !isSame }));
+    if (onReactStory) {
+      onReactStory(currentStory.id, currentGroup.id, type);
+    } else if (onLikeStory) {
+      onLikeStory(currentStory.id, currentGroup.id);
     }
   };
 
@@ -502,12 +512,18 @@ export default function StoryViewer({
         >
           {/* Barra de Reacciones Rápidas */}
           <div className="flex items-center justify-around py-1">
-            {QUICK_REACTIONS.map((emoji) => (
+            {QUICK_REACTIONS.map(({ type, emoji, label }) => (
               <button
-                key={emoji}
-                onClick={() => triggerReaction(emoji)}
-                className="text-2xl hover:scale-135 active:scale-95 transition-transform p-1 select-none"
-                title={`Reaccionar con ${emoji}`}
+                key={type}
+                type="button"
+                onClick={() => handleQuickReaction(type, emoji)}
+                className={cn(
+                  "text-2xl hover:scale-125 active:scale-95 transition-transform p-1 rounded-full select-none",
+                  currentStory?.myReaction === type && "bg-white/20 ring-1 ring-white/40"
+                )}
+                title={label}
+                aria-label={`Reaccionar: ${label}`}
+                aria-pressed={currentStory?.myReaction === type}
               >
                 {emoji}
               </button>

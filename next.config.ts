@@ -10,9 +10,12 @@ const nextConfig: NextConfig = {
   },
   output: 'standalone',
   experimental: {
+    // Subida de videos/audios pesados (multipart) vía Server Actions
     serverActions: {
-      bodySizeLimit: '10mb',
+      bodySizeLimit: '150mb',
     },
+    // proxy.ts almacena el cuerpo de cada petición; por defecto lo corta a 10MB y rompía los videos
+    proxyClientMaxBodySize: '150mb',
   },
   async rewrites() {
     return [

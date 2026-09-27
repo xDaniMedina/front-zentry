@@ -1,7 +1,7 @@
 "use client"
 import { getEquippedItemsAction, getStoreCatalogAction } from "@/lib/actions/shop";
 import { rarityRingClass } from "@/lib/shop";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -20,6 +20,7 @@ import { fetchAchievements } from "@/lib/actions/gamification";
 import { followUserAction, updateProfileAction, updateProfileWithFilesAction } from "@/lib/actions/profile";
 import FollowsModal from "@/components/feed/FollowsModal";
 import { getImageUrl } from "@/lib/utils";
+import { DISCIPLINES, disciplineEmoji, disciplineLabel, joinSpecialties, parseSpecialties } from "@/lib/disciplines";
 import { getPostsByUsernameAction, getSavedPostsAction, getLikedPostsAction } from "@/lib/actions/feed";
 import type { PostType } from "@/components/feed/FeedCard";
 import ShareProfileModal from "@/components/profile/ShareProfileModal";
@@ -30,6 +31,7 @@ export type ProfileData = {
   discipline: string;
   location: string;
   bio: string;
+  specialties?: string;
   avatarUrl: string;
   bannerUrl: string;
   followersCount: number;
@@ -94,7 +96,8 @@ export default function ProfileClient({ initialData, username }: { initialData: 
 
   const { data: equippedRes } = useSWR('equippedItems', getEquippedItemsAction);
   const { data: catalogRes } = useSWR('storeCatalog', getStoreCatalogAction);
-  const equipped = equippedRes?.equipped || {};
+  // /store/equipped devuelve lo del usuario autenticado: solo aplica a su propio perfil
+  const equipped: Record<string, number> = isCurrentUser ? (equippedRes?.equipped || {}) : {};
   const storeItems = catalogRes?.items || [];
 
   const equippedFrameItem = storeItems.find(i => Number(i.id) === Number(equipped.frames));
@@ -123,10 +126,30 @@ export default function ProfileClient({ initialData, username }: { initialData: 
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({
     name: profile.name || "",
-    discipline: profile.discipline || "",
+    discipline: disciplineLabel(profile.discipline),
     location: profile.location || "",
-    bio: profile.bio || ""
+    bio: profile.bio || "",
+    specialties: profile.specialties || ""
   });
+  const [customSpecialty, setCustomSpecialty] = useState("");
+
+  const toggleEditSpecialty = (label: string) => {
+    setEditForm(prev => {
+      const current = parseSpecialties(prev.specialties);
+      const next = current.includes(label) ? current.filter(s => s !== label) : [...current, label];
+      return { ...prev, specialties: joinSpecialties(next) };
+    });
+  };
+
+  const addCustomSpecialty = () => {
+    const value = customSpecialty.replace(/,/g, " ").trim();
+    if (!value) return;
+    setEditForm(prev => {
+      const current = parseSpecialties(prev.specialties);
+      return current.includes(value) ? prev : { ...prev, specialties: joinSpecialties([...current, value]) };
+    });
+    setCustomSpecialty("");
+  };
 
   const handleToggleFollow = async () => {
     const previousState = isFollowing;
@@ -207,6 +230,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
       formData.append('discipline', editForm.discipline);
       formData.append('location', editForm.location);
       formData.append('bio', editForm.bio);
+      formData.append('specialties', editForm.specialties);
       if (avatarFile) formData.append('avatar', avatarFile);
       if (bannerFile) formData.append('banner', bannerFile);
 
@@ -225,6 +249,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         name: data.name ?? editForm.name,
         discipline: data.discipline ?? editForm.discipline,
         bio: data.bio ?? editForm.bio,
+        specialties: data.specialties ?? editForm.specialties,
         location: data.location ?? editForm.location,
         avatar_url: data.avatarUrl ?? profile.avatarUrl,
         banner_url: data.bannerUrl ?? profile.bannerUrl,
@@ -236,9 +261,13 @@ export default function ProfileClient({ initialData, username }: { initialData: 
         discipline: data.discipline ?? editForm.discipline,
         location: data.location ?? editForm.location,
         bio: data.bio ?? editForm.bio,
+        specialties: data.specialties ?? editForm.specialties,
         avatarUrl: data.avatarUrl ?? prev.avatarUrl,
         bannerUrl: data.bannerUrl ?? prev.bannerUrl,
       }));
+
+      // Refresca el avatar/disciplina del sidebar
+      mutate('myProfile');
 
       setIsEditModalOpen(false);
       setAvatarFile(null);
@@ -322,7 +351,7 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                 </span>
               )}
             </div>
-            <p className="text-zentry-text-2">@{profile.username} • {profile.discipline}</p>
+            <p className="text-zentry-text-2">@{profile.username}{profile.discipline ? ` • ${disciplineLabel(profile.discipline)}` : ""}</p>
           </div>
           
           <div className="flex items-center gap-2">
@@ -393,9 +422,22 @@ export default function ProfileClient({ initialData, username }: { initialData: 
           </div>
         </div>
         
-        <p className="text-sm text-zentry-text-1 mb-4 max-w-2xl leading-relaxed">
+        <p className="text-sm text-zentry-text-1 mb-4 max-w-2xl leading-relaxed whitespace-pre-line">
           {profile.bio}
         </p>
+
+        {parseSpecialties(profile.specialties).length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {parseSpecialties(profile.specialties).map(spec => (
+              <span
+                key={spec}
+                className="text-xs font-semibold text-zentry-accent bg-zentry-accent/10 border border-zentry-accent/30 px-2.5 py-1 rounded-full"
+              >
+                {disciplineEmoji(spec) ? `${disciplineEmoji(spec)} ` : ""}{spec}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-zentry-text-2 mb-6">
           <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {profile.location}</span>
@@ -869,6 +911,52 @@ export default function ProfileClient({ initialData, username }: { initialData: 
                       className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors resize-none h-24"
                       placeholder="Cuéntale a la comunidad sobre ti..."
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase tracking-wider">Selecciones de Arte y Especialidades</label>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(new Set([...DISCIPLINES.map(d => d.label), ...parseSpecialties(editForm.specialties)])).map(label => {
+                        const selected = parseSpecialties(editForm.specialties).includes(label);
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => toggleEditSpecialty(label)}
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1 ${
+                              selected
+                                ? "bg-zentry-accent/15 border-zentry-accent text-zentry-accent"
+                                : "bg-zentry-bg border-zentry-border text-zentry-text-2 hover:text-zentry-text-1"
+                            }`}
+                          >
+                            {disciplineEmoji(label) ?? ""} {label}
+                            {selected && <X className="w-3 h-3" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={customSpecialty}
+                        onChange={e => setCustomSpecialty(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCustomSpecialty();
+                          }
+                        }}
+                        className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors"
+                        placeholder="Agregar otra especialidad..."
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomSpecialty}
+                        className="px-4 py-2 rounded-xl text-sm font-bold bg-zentry-accent/20 text-zentry-accent hover:bg-zentry-accent/30 transition-colors"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-zentry-text-2 mt-1">Toca una especialidad para marcarla o quitarla.</p>
                   </div>
                 </form>
               </div>

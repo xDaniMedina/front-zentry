@@ -1,842 +1,454 @@
 "use client"
 
-import { useState, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ArrowLeft, Plus, CheckCircle2, Files, History, 
-  Users, UploadCloud, MessageSquare, Trash2, Check, Share2,
-  Download, Send, Heart, UserPlus,
-  Loader2
-} from "lucide-react";
-import { toast } from "sonner";
+import VoicePresenceBadge from "@/components/projects/VoicePresenceBadge"
+import { useCallback, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
+import Image from "next/image"
+import Link from "next/link"
 import {
-  addProjectTaskAction,
-  toggleProjectTaskAction,
-  deleteTaskAction,
-  addResourceAction,
-  addProjectCommentAction,
-  toggleProjectLikeAction,
-  inviteProjectMemberAction,
-  removeProjectMemberAction,
-} from "@/lib/actions/projects";
-import { getImageUrl } from "@/lib/utils";
-import { Project, ProjectTask, ProjectPriority } from "@/types";
+  ArrowLeft, Globe, Lock, Heart, Send, Trash2, LogOut, Camera, Loader2, LayoutDashboard, BookOpen, FolderOpen,
+  CheckSquare, MessagesSquare, Users, Wand2, Plus, UserPlus, Crown, X, CheckCircle2, Activity, StickyNote, Pencil,
+} from "lucide-react"
+import { toast } from "sonner"
+import type { Project, ProjectMember, ProjectTask, ProjectComment, DriveItem } from "@/types"
+import {
+  updateProjectAction, deleteProjectAction, publishProjectAction, toggleProjectLikeAction, uploadProjectCoverAction,
+  inviteProjectMemberAction, removeProjectMemberAction, addProjectTaskAction, toggleProjectTaskAction, deleteTaskAction,
+  addNoteAction,
+} from "@/lib/actions/projects"
+import { useAuth } from "@/context/AuthContext"
+import ProjectDrive from "@/components/projects/ProjectDrive"
+import BookWorkspace from "@/components/projects/BookWorkspace"
+import SharedWorkPanel from "@/components/projects/SharedWorkPanel"
+import ProjectChannel from "@/components/projects/ProjectChannel"
+import PublishCelebration from "@/components/shared/PublishCelebration"
+import UserAvatar from "@/components/shared/UserAvatar"
+import { projectTypeInfo, STATUS_LABELS } from "@/lib/projects"
+import { cn, getImageUrl, timeAgo } from "@/lib/utils"
 
-export type ProjectResource = {
-  id: string;
-  name: string;
-  type: string;
-  size: string;
-  uploadedBy: string;
-  date: string;
-  url?: string;
-};
+type Tab = "overview" | "work" | "drive" | "tasks" | "channel" | "team"
 
-export type ProjectActivity = {
-  id: string;
-  user: string;
-  avatar: string;
-  action: string;
-  target: string;
-  time: string;
-  iconType: 'task' | 'file' | 'member' | 'status';
-};
+export default function ProjectDetailClient({ projectId, initialProject }: { projectId: string; initialProject: Project | null }) {
+  const router = useRouter()
+  const { user } = useAuth()
+  const [project, setProject] = useState<Project | null>(initialProject)
+  const [tab, setTab] = useState<Tab>("overview")
+  const [publishing, setPublishing] = useState(false)
+  const [celebrate, setCelebrate] = useState(false)
+  const coverInput = useRef<HTMLInputElement>(null)
 
-export type ProjectCollaborator = {
-  id: string;
-  name: string;
-  avatar: string;
-  role: string;
-  isOnline: boolean;
-  tasksCompleted: number;
-};
+  const patch = useCallback((changes: Partial<Project>) => setProject(p => (p ? { ...p, ...changes } : p)), [])
 
-interface ProjectDetailClientProps {
-  projectId: string;
-  initialProject?: Project | null;
-}
+  if (!project) {
+    return (
+      <div className="py-24 text-center space-y-3">
+        <Lock className="w-10 h-10 mx-auto text-zentry-text-2" />
+        <p className="text-sm font-bold text-zentry-text-1">Este proyecto no existe o es privado</p>
+        <Link href="/projects" className="text-xs text-zentry-accent font-bold">Volver a Proyectos</Link>
+      </div>
+    )
+  }
 
-export default function ProjectDetailClient({ projectId, initialProject }: ProjectDetailClientProps) {
-  const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isPending, startTransition] = useTransition();
+  const isOwner = Boolean(project.isOwner)
+  const isMember = Boolean(project.isMember)
+  const type = projectTypeInfo(project.projectType)
+  const status = STATUS_LABELS[project.status] ?? STATUS_LABELS.active
+  const hasWorkTab = project.projectType && project.projectType !== "general"
 
-  // Tab Activa
-  const [activeTab, setActiveTab] = useState<'tasks' | 'resources' | 'history' | 'team' | 'notes'>('tasks');
+  const tabs: { id: Tab; label: string; icon: typeof LayoutDashboard; show: boolean }[] = [
+    { id: "overview", label: "Resumen", icon: LayoutDashboard, show: true },
+    { id: "work", label: project.projectType === "book" ? "Libro" : "Obra", icon: project.projectType === "book" ? BookOpen : Wand2, show: Boolean(hasWorkTab) },
+    { id: "drive", label: "Drive", icon: FolderOpen, show: true },
+    { id: "tasks", label: "Tareas", icon: CheckSquare, show: isMember },
+    { id: "channel", label: "Chat y voz", icon: MessagesSquare, show: isMember },
+    { id: "team", label: "Equipo", icon: Users, show: true },
+  ]
 
-  // Datos del Proyecto (no hay flujo de edición de título/descripción/estado todavía)
-  const projectTitle = initialProject?.title || initialProject?.name || `Proyecto #${projectId}`;
-  const projectDesc = initialProject?.description || "Iniciativa colaborativa en la red creativa Zentry.";
-  const projectStatus: 'active' | 'completed' | 'paused' = initialProject?.status || 'active';
-  const [likesCount, setLikesCount] = useState(initialProject?.likesCount || 0);
-  const [isLiked, setIsLiked] = useState(initialProject?.isLiked || false);
+  const update = async (changes: Parameters<typeof updateProjectAction>[1], okMessage?: string) => {
+    const res = await updateProjectAction(project.id, changes)
+    if (!res.success || !res.data) { toast.error(res.error); return false }
+    patch({ ...res.data, members: project.members, resources: project.resources })
+    if (okMessage) toast.success(okMessage)
+    return true
+  }
 
-  // Estado de Tareas
-  const [tasks, setTasks] = useState<ProjectTask[]>(initialProject?.tasks || []);
+  const uploadCover = async (file: File) => {
+    if (!file.type.startsWith("image/")) { toast.error("La portada debe ser una imagen"); return }
+    const fd = new FormData()
+    fd.set("file", file, file.name)
+    const res = await uploadProjectCoverAction(project.id, fd)
+    if (!res.success || !res.data) { toast.error(res.error); return }
+    patch({ coverUrl: res.data.coverUrl })
+    toast.success("Portada actualizada")
+  }
 
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<ProjectPriority>('media');
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const publish = async () => {
+    if (!window.confirm("¿Publicar el proyecto terminado en el feed principal? Quedará marcado como completado.")) return
+    setPublishing(true)
+    const res = await publishProjectAction(project.id)
+    setPublishing(false)
+    if (!res.success || !res.data) { toast.error(res.error); return }
+    patch({ status: res.data.status, publishedPostId: res.data.publishedPostId })
+    setCelebrate(true)
+  }
 
-  // Estado de Recursos / Archivos (metadatos reales del backend; sin almacenamiento de archivo aún)
-  const [resources, setResources] = useState<ProjectResource[]>(
-    (initialProject as unknown as { resources?: ProjectResource[] })?.resources || []
-  );
+  const toggleLike = async () => {
+    const was = project.isLiked
+    patch({ isLiked: !was, likesCount: (project.likesCount || 0) + (was ? -1 : 1) })
+    const res = await toggleProjectLikeAction(project.id)
+    if (res.success) patch({ isLiked: res.isLiked, likesCount: res.likesCount })
+    else patch({ isLiked: was, likesCount: project.likesCount })
+  }
 
-  // Estado de Colaboradores
-  const [collaborators, setCollaborators] = useState<ProjectCollaborator[]>(
-    (initialProject?.members || []).map(m => ({
-      id: m.id,
-      name: m.name,
-      avatar: m.avatar,
-      role: m.role,
-      isOnline: m.isOnline,
-      tasksCompleted: 0,
-    }))
-  );
+  const remove = async () => {
+    if (!window.confirm(`¿Eliminar "${project.title}"? Se borrarán sus archivos, capítulos, tareas y chat.`)) return
+    const res = await deleteProjectAction(project.id)
+    if (!res.success) { toast.error(res.error); return }
+    toast.success("Proyecto eliminado")
+    router.push("/projects")
+  }
 
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteUsername, setInviteUsername] = useState("");
-
-  // Estado de Historial de Actividad (real, generado por el backend en cada acción)
-  const [activities, setActivities] = useState<ProjectActivity[]>(
-    (initialProject as unknown as { activities?: ProjectActivity[] })?.activities || []
-  );
-
-  // Estado de Notas Rápidas & Discusión
-  const [notes, setNotes] = useState<Array<{ id: string; user: string; text: string; time: string }>>(
-    (initialProject?.comments || []).map(c => ({
-      id: c.id,
-      user: c.authorName || `@${c.authorUsername}`,
-      text: c.content,
-      time: c.createdAt
-    }))
-  );
-  const [newNoteText, setNewNoteText] = useState("");
-
-  // Cálculos de Progreso
-  const completedCount = tasks.filter(t => t.completed).length;
-  const totalCount = tasks.length;
-  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-  // Reacción Social (Like)
-  const handleToggleLike = () => {
-    const previousLiked = isLiked;
-    const previousCount = likesCount;
-    const nextLiked = !isLiked;
-    setIsLiked(nextLiked);
-    setLikesCount(prev => nextLiked ? prev + 1 : Math.max(0, prev - 1));
-
-    startTransition(async () => {
-      const res = await toggleProjectLikeAction(projectId);
-      if (res.success) {
-        if (res.isLiked !== undefined) setIsLiked(res.isLiked);
-        if (res.likesCount !== undefined) setLikesCount(res.likesCount);
-      } else {
-        setIsLiked(previousLiked);
-        setLikesCount(previousCount);
-      }
-    });
-  };
-
-  const handleRemoveMember = (username: string) => {
-    const previous = collaborators;
-    setCollaborators(prev => prev.filter(c => c.id !== username));
-
-    startTransition(async () => {
-      const res = await removeProjectMemberAction(projectId, username);
-      if (!res.success) {
-        setCollaborators(previous);
-        toast.error(res.error || "No se pudo quitar al colaborador");
-      }
-    });
-  };
-
-  // Acciones de Tareas
-  const toggleTask = (taskId: string) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id === taskId) {
-        const nextState = !t.completed;
-        if (nextState) {
-          setActivities(act => [
-            {
-              id: Date.now().toString(),
-              user: 'Tú',
-              avatar: 'YO',
-              action: 'completó la tarea',
-              target: t.title,
-              time: 'Justo ahora',
-              iconType: 'task'
-            },
-            ...act
-          ]);
-          toast.success("¡Tarea completada! 🎉");
-        }
-
-        startTransition(async () => {
-          await toggleProjectTaskAction(projectId, taskId, nextState);
-        });
-
-        return { ...t, completed: nextState };
-      }
-      return t;
-    }));
-  };
-
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-
-    const newTask: ProjectTask = {
-      id: Date.now().toString(),
-      title: newTaskTitle.trim(),
-      completed: false,
-      priority: newTaskPriority,
-      assignedTo: 'Tú',
-      dueDate: 'Pronto'
-    };
-
-    setTasks([newTask, ...tasks]);
-    setActivities(act => [
-      {
-        id: Date.now().toString(),
-        user: 'Tú',
-        avatar: 'YO',
-        action: 'creó la tarea',
-        target: newTaskTitle.trim(),
-        time: 'Justo ahora',
-        iconType: 'task'
-      },
-      ...act
-    ]);
-
-    setNewTaskTitle("");
-    setIsAddingTask(false);
-    toast.success("Nueva tarea añadida al proyecto ✨");
-
-    startTransition(async () => {
-      await addProjectTaskAction(projectId, {
-        title: newTask.title,
-        priority: newTask.priority,
-        assignedTo: newTask.assignedTo,
-        dueDate: newTask.dueDate
-      });
-    });
-  };
-
-  const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const previous = tasks;
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-
-    startTransition(async () => {
-      const res = await deleteTaskAction(projectId, taskId);
-      if (res.success) {
-        toast.info("Tarea eliminada.");
-      } else {
-        setTasks(previous);
-        toast.error("No se pudo eliminar la tarea");
-      }
-    });
-  };
-
-  // Subida de Archivos (solo metadatos: el backend aún no almacena el archivo en sí)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    startTransition(async () => {
-      const res = await addResourceAction(projectId, { name: file.name, file });
-      if (res.success && res.data) {
-        setResources(prev => [{
-          id: String(res.data.id),
-          name: res.data.name,
-          type: res.data.type,
-          size: res.data.size,
-          uploadedBy: res.data.uploadedBy,
-          date: res.data.uploadedAt,
-          url: res.data.url,
-        }, ...prev]);
-        toast.success(`Archivo "${file.name}" subido al proyecto 📁`);
-      } else {
-        toast.error(res.error || "No se pudo subir el archivo");
-      }
-    });
-  };
-
-  // Invitar Colaborador
-  const handleInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteUsername.trim()) return;
-
-    const clean = inviteUsername.replace('@', '');
-
-    startTransition(async () => {
-      const res = await inviteProjectMemberAction(projectId, clean);
-      if (res.success && res.data) {
-        setCollaborators(prev => [...prev, {
-          id: res.data!.id,
-          name: res.data!.name,
-          avatar: res.data!.avatar,
-          role: res.data!.role,
-          isOnline: false,
-          tasksCompleted: 0,
-        }]);
-        toast.success(`¡Invitación enviada a @${clean}! 🚀`);
-      } else {
-        toast.error(res.error || "No se pudo invitar a este usuario");
-      }
-    });
-
-    setInviteUsername("");
-    setIsInviteModalOpen(false);
-  };
-
-  // Enviar Nota / Comentario
-  const handleSendNote = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNoteText.trim()) return;
-
-    const noteContent = newNoteText.trim();
-    setNotes([
-      ...notes,
-      {
-        id: Date.now().toString(),
-        user: 'Tú',
-        text: noteContent,
-        time: 'Justo ahora'
-      }
-    ]);
-    setNewNoteText("");
-
-    startTransition(async () => {
-      await addProjectCommentAction(projectId, noteContent);
-    });
-  };
-
-  const filteredTasks = tasks.filter(t => {
-    if (taskFilter === 'pending') return !t.completed;
-    if (taskFilter === 'completed') return t.completed;
-    return true;
-  });
+  const leave = async () => {
+    const me = project.members.find(m => m.userId === user?.id)
+    if (!me?.username || !window.confirm("¿Salir de este proyecto?")) return
+    const res = await removeProjectMemberAction(project.id, me.username)
+    if (!res.success) { toast.error(res.error); return }
+    toast.success("Saliste del proyecto")
+    router.push("/projects")
+  }
 
   return (
-    <div className="w-full mx-auto py-4 sm:py-6 space-y-6">
-      
-      {/* 1. BOTÓN VOLVER & ACCIONES SUPERIORES */}
-      <div className="flex items-center justify-between gap-4">
-        <button 
-          onClick={() => router.push('/projects')}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-zentry-card border border-zentry-border text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 hover:border-zentry-accent/40 transition-all shadow-sm"
-        >
-          <ArrowLeft className="w-4 h-4" /> Volver a Proyectos
-        </button>
+    <div className="w-full py-2 sm:py-6 pb-24 space-y-5">
+      <Link href="/projects" className="text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 flex items-center gap-1 w-fit"><ArrowLeft className="w-4 h-4" /> Proyectos</Link>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleToggleLike}
-            className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-              isLiked 
-                ? 'bg-rose-500/15 text-rose-400 border-rose-500/30' 
-                : 'bg-zentry-card text-zentry-text-2 border-zentry-border hover:text-zentry-text-1'
-            }`}
-            title="Apoyar iniciativa"
-          >
-            <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-400 text-rose-400' : ''}`} />
-            <span className="font-mono">{likesCount}</span>
-          </button>
-
-          <button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="px-4 py-2 rounded-2xl bg-zentry-accent text-white text-xs font-black hover:opacity-90 shadow-md flex items-center gap-1.5 transition-all"
-          >
-            <UserPlus className="w-4 h-4" /> Invitar Colaborador
-          </button>
-
-          <button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                navigator.clipboard.writeText(window.location.href);
-                toast.success("Enlace del proyecto copiado al portapapeles 📋");
-              }
-            }}
-            className="p-2 rounded-2xl bg-zentry-card border border-zentry-border text-zentry-text-2 hover:text-zentry-text-1 transition-colors shadow-sm"
-            title="Compartir proyecto"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
+      {/* Portada + cabecera */}
+      <header className="bg-zentry-card border border-zentry-border rounded-3xl overflow-hidden">
+        <div className="relative h-36 sm:h-48 bg-gradient-to-br from-indigo-950 via-purple-950/70 to-zentry-bg group">
+          {project.coverUrl && <Image src={getImageUrl(project.coverUrl)} alt={project.title} fill sizes="1000px" className="object-cover" priority />}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+          {isOwner && (
+            <>
+              <button onClick={() => coverInput.current?.click()}
+                className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/60 text-white text-[11px] font-bold flex items-center gap-1.5 backdrop-blur cursor-pointer">
+                <Camera className="w-3.5 h-3.5" /> {project.coverUrl ? "Cambiar portada" : "Añadir portada"}
+              </button>
+              <input ref={coverInput} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = "" }} />
+            </>
+          )}
+          <div className="absolute bottom-3 left-4 right-4 flex flex-wrap items-center gap-2">
+            <span className={cn("text-[10px] font-black px-2 py-1 rounded-lg border flex items-center gap-1 backdrop-blur", type.color)}><type.icon className="w-3 h-3" /> {type.label}</span>
+            <span className={cn("text-[10px] font-bold px-2 py-1 rounded-lg border backdrop-blur", status.className)}>{status.label}</span>
+            {project.publishedPostId && <span className="text-[10px] font-bold px-2 py-1 rounded-lg border text-sky-300 bg-sky-500/15 border-sky-500/30 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Publicado en el feed</span>}
+          </div>
         </div>
-      </div>
-
-      {/* 2. CABECERA DEL PROYECTO & TARJETA DE PROGRESO */}
-      <div className="bg-gradient-to-br from-zentry-card via-zentry-card to-zentry-bg border border-zentry-border rounded-3xl p-5 sm:p-8 shadow-sm relative overflow-hidden space-y-6">
-        
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          
-          {/* Info Principal */}
-          <div className="space-y-2 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md bg-zentry-accent/15 border border-zentry-accent/30 text-zentry-accent text-[11px] font-mono font-bold uppercase">
-                ID: #{projectId}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold">
-                ⚡ {projectStatus === 'active' ? 'En Desarrollo' : projectStatus === 'completed' ? 'Completado' : 'Pausado'}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-bold">
-                {initialProject?.category || 'Creativo & Técnico'}
-              </span>
-            </div>
-
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-zentry-text-1 tracking-tight">
-              {projectTitle}
-            </h1>
-            <p className="text-xs sm:text-sm text-zentry-text-2 max-w-2xl leading-relaxed">
-              {projectDesc}
+        <div className="p-4 sm:p-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-black text-zentry-text-1 break-words">{project.title}</h1>
+            <p className="text-xs text-zentry-text-2 mt-1">
+              Creado por <Link href={`/profile/${project.authorUsername}`} className="font-bold text-zentry-text-1 hover:text-zentry-accent">@{project.authorUsername}</Link>
+              {" · "}actualizado {timeAgo(project.updatedAt)}
             </p>
           </div>
-
-          {/* Widget de Progreso Circular / Barra */}
-          <div className="p-4 bg-zentry-bg/80 border border-zentry-border rounded-2xl sm:rounded-3xl w-full lg:w-72 space-y-3 shrink-0 shadow-inner">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-extrabold text-zentry-text-2 uppercase tracking-wider text-[10px]">Progreso del Sprint</span>
-              <span className="font-black text-amber-400 font-mono text-sm">{progressPercent}%</span>
-            </div>
-
-            <div className="w-full bg-zentry-card rounded-full h-2.5 overflow-hidden border border-zentry-border">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPercent}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-zentry-accent rounded-full shadow-sm"
-              />
-            </div>
-
-            <div className="flex justify-between items-center text-[11px] text-zentry-text-2 font-mono">
-              <span>{completedCount} de {totalCount} tareas listas</span>
-              <span className="text-emerald-400 font-bold">{totalCount - completedCount} restantes</span>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* 3. SISTEMA DE PESTAÑAS (TABS) */}
-      <div className="flex gap-2 overflow-x-auto hide-scrollbar border-b border-zentry-border pb-1">
-        {[
-          { id: 'tasks', label: `Tareas (${tasks.length})`, icon: CheckCircle2 },
-          { id: 'resources', label: `Recursos (${resources.length})`, icon: Files },
-          { id: 'team', label: `Equipo (${collaborators.length})`, icon: Users },
-          { id: 'history', label: `Historial (${activities.length})`, icon: History },
-          { id: 'notes', label: `Notas (${notes.length})`, icon: MessageSquare },
-        ].map(tab => {
-          const IconC = tab.icon;
-          const isAct = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all whitespace-nowrap ${
-                isAct
-                  ? 'bg-zentry-accent text-white shadow-md shadow-zentry-accent/20'
-                  : 'text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-card'
-              }`}
-            >
-              <IconC className="w-4 h-4" /> {tab.label}
+          <div className="flex flex-wrap items-center gap-2">
+            {isMember && <VoicePresenceBadge projectId={project.id} onJoin={() => setTab("channel")} />}
+            <button onClick={toggleLike} className={cn("px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 cursor-pointer",
+              project.isLiked ? "text-rose-400 border-rose-500/40 bg-rose-500/10" : "text-zentry-text-2 border-zentry-border bg-zentry-bg")}>
+              <Heart className={cn("w-3.5 h-3.5", project.isLiked && "fill-rose-400")} /> {project.likesCount || 0}
             </button>
-          );
-        })}
-      </div>
-
-      {/* 4. CONTENIDO SEGÚN LA PESTAÑA ACTIVA */}
-      
-      {/* PESTAÑA 1: TAREAS */}
-      {activeTab === 'tasks' && (
-        <div className="space-y-4">
-          
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zentry-card p-4 rounded-2xl border border-zentry-border">
-            <div className="flex items-center gap-2">
-              {(['all', 'pending', 'completed'] as const).map(st => (
-                <button
-                  key={st}
-                  onClick={() => setTaskFilter(st)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                    taskFilter === st 
-                      ? 'bg-zentry-bg text-zentry-text-1 border border-zentry-border' 
-                      : 'text-zentry-text-2 hover:text-zentry-text-1'
-                  }`}
-                >
-                  {st === 'all' ? 'Todas' : st === 'pending' ? 'Pendientes' : 'Completadas'}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setIsAddingTask(!isAddingTask)}
-              className="px-4 py-2 bg-zentry-accent hover:opacity-90 active:scale-95 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" /> Nueva Tarea
-            </button>
-          </div>
-
-          {/* Formulario para añadir tarea */}
-          {isAddingTask && (
-            <form onSubmit={handleAddTask} className="p-4 bg-zentry-card border border-zentry-accent/50 rounded-2xl space-y-3 shadow-lg">
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newTaskTitle}
-                  onChange={e => setNewTaskTitle(e.target.value)}
-                  placeholder="Título de la tarea (ej. Crear endpoint POST en backend)..."
-                  className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
-                />
-                <select
-                  value={newTaskPriority}
-                  onChange={e => setNewTaskPriority(e.target.value as ProjectPriority)}
-                  className="bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2.5 text-xs text-zentry-text-1 focus:outline-none"
-                >
-                  <option value="baja">Baja</option>
-                  <option value="media">Media</option>
-                  <option value="alta">Alta</option>
-                  <option value="urgente">Urgente</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => setIsAddingTask(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-zentry-text-2 hover:bg-zentry-bg"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-1.5 rounded-lg text-xs font-black bg-zentry-accent text-white hover:opacity-90"
-                >
-                  Guardar Tarea
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Lista de Tareas */}
-          <div className="space-y-2.5">
-            {filteredTasks.length === 0 ? (
-              <div className="p-8 text-center bg-zentry-card border border-zentry-border rounded-2xl text-xs text-zentry-text-2">
-                No hay tareas en este filtro.
-              </div>
-            ) : (
-              filteredTasks.map((t) => (
-                <motion.div
-                  layout
-                  key={t.id}
-                  onClick={() => toggleTask(t.id)}
-                  className={`p-3.5 sm:p-4 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                    t.completed 
-                      ? 'bg-zentry-bg/70 border-zentry-border/50 opacity-70' 
-                      : 'bg-zentry-card border-zentry-border hover:border-zentry-accent/40 shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <button 
-                      type="button"
-                      className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors shrink-0 ${
-                        t.completed ? 'bg-emerald-500 text-white' : 'border-2 border-zentry-border hover:border-zentry-accent'
-                      }`}
-                    >
-                      {t.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                    </button>
-                    
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-xs sm:text-sm font-medium ${t.completed ? 'line-through text-zentry-text-2' : 'text-zentry-text-1'}`}>
-                        {t.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-zentry-text-2">
-                        {t.assignedTo && <span>Asignado: <strong className="text-zentry-text-1">{t.assignedTo}</strong></span>}
-                        {t.dueDate && <span>• Vence: {t.dueDate}</span>}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md border ${
-                      t.priority === 'alta' || t.priority === 'urgente'
-                        ? 'text-red-400 bg-red-500/10 border-red-500/20' 
-                        : t.priority === 'media'
-                          ? 'text-blue-400 bg-blue-500/10 border-blue-500/20'
-                          : 'text-slate-400 bg-slate-500/10 border-slate-500/20'
-                    }`}>
-                      {t.priority}
-                    </span>
-
-                    <button 
-                      onClick={(e) => handleDeleteTask(t.id, e)}
-                      className="p-1.5 rounded-lg text-zentry-text-2 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      title="Eliminar tarea"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))
+            {isOwner && (
+              <button onClick={() => update({ visibility: project.visibility === "public" ? "private" : "public" },
+                project.visibility === "public" ? "El proyecto ahora es privado" : "El proyecto ahora es público")}
+                className="px-3 py-2 rounded-xl text-xs font-bold border border-zentry-border bg-zentry-bg text-zentry-text-1 flex items-center gap-1.5 cursor-pointer"
+                title="Cambiar visibilidad">
+                {project.visibility === "public" ? <><Globe className="w-3.5 h-3.5 text-emerald-400" /> Público</> : <><Lock className="w-3.5 h-3.5 text-amber-400" /> Privado</>}
+              </button>
             )}
+            {!isOwner && (
+              <span className="px-3 py-2 rounded-xl text-xs font-bold border border-zentry-border bg-zentry-bg text-zentry-text-2 flex items-center gap-1.5">
+                {project.visibility === "public" ? <><Globe className="w-3.5 h-3.5" /> Público</> : <><Lock className="w-3.5 h-3.5" /> Privado</>}
+              </span>
+            )}
+            {isOwner && !project.publishedPostId && (
+              <button onClick={publish} disabled={publishing}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
+                {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Publicar en el feed
+              </button>
+            )}
+            {isOwner ? (
+              <button onClick={remove} aria-label="Eliminar proyecto" className="p-2 rounded-xl text-red-400 border border-red-500/30 hover:bg-red-500/10 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+            ) : isMember ? (
+              <button onClick={leave} className="px-3 py-2 rounded-xl text-xs font-bold text-red-400 border border-red-500/30 flex items-center gap-1.5 cursor-pointer"><LogOut className="w-3.5 h-3.5" /> Salir</button>
+            ) : null}
           </div>
-
         </div>
-      )}
+      </header>
 
-      {/* PESTAÑA 2: RECURSOS Y ARCHIVOS */}
-      {activeTab === 'resources' && (
-        <div className="space-y-4">
-          
-          <div className="flex items-center justify-between bg-zentry-card p-4 rounded-2xl border border-zentry-border">
-            <div>
-              <h3 className="font-extrabold text-sm text-zentry-text-1">Archivos y Entregables del Proyecto</h3>
-              <p className="text-xs text-zentry-text-2">Formatos compatibles: Figma, PDF, ZIP, PNG, JSON, etc.</p>
+      {/* Pestañas */}
+      <nav className="flex gap-1 overflow-x-auto bg-zentry-card border border-zentry-border rounded-2xl p-1 custom-scrollbar" aria-label="Secciones del proyecto">
+        {tabs.filter(t => t.show).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={cn("px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap transition cursor-pointer",
+              tab === t.id ? "bg-zentry-accent text-white shadow" : "text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg")}>
+            <t.icon className="w-3.5 h-3.5" /> {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "overview" && <Overview project={project} isOwner={isOwner} isMember={isMember} onUpdate={update} onGo={setTab} />}
+      {tab === "work" && (project.projectType === "book"
+        ? <BookWorkspace projectId={project.id} canEdit={isMember} onCountChange={(n) => patch({ chaptersCount: n })} />
+        : <SharedWorkPanel studioProjectId={project.studioProjectId} projectType={project.projectType || "image"} canEdit={isMember} />)}
+      {tab === "drive" && <ProjectDrive projectId={project.id} items={project.resources || []} canEdit={isMember} onChange={(resources: DriveItem[]) => patch({ resources })} />}
+      {tab === "tasks" && isMember && <Tasks project={project} onChange={patch} />}
+      {tab === "channel" && isMember && <ProjectChannel projectId={project.id} projectTitle={project.title} members={project.members} myUserId={user?.id ? Number(user.id) : undefined} />}
+      {tab === "team" && <Team project={project} isOwner={isOwner} onChange={(members) => patch({ members, membersCount: members.length })} />}
+
+      <PublishCelebration
+        open={celebrate}
+        title={project.title}
+        mediaType={project.projectType === "book" ? "text" : project.projectType === "general" ? "image" : project.projectType}
+        mediaUrl={project.coverUrl ? getImageUrl(project.coverUrl) : null}
+        onClose={() => { setCelebrate(false); router.push("/feed") }}
+      />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+function Overview({ project, isOwner, isMember, onUpdate, onGo }: {
+  project: Project
+  isOwner: boolean
+  isMember: boolean
+  onUpdate: (changes: Parameters<typeof updateProjectAction>[1], msg?: string) => Promise<boolean>
+  onGo: (tab: Tab) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(project.title)
+  const [description, setDescription] = useState(project.description)
+  const [notes, setNotes] = useState<ProjectComment[]>(project.comments || [])
+  const [note, setNote] = useState("")
+
+  const save = async () => {
+    if (!title.trim()) { toast.error("El título no puede estar vacío"); return }
+    if (await onUpdate({ title: title.trim(), description: description.trim() }, "Proyecto actualizado")) setEditing(false)
+  }
+
+  const addNote = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!note.trim()) return
+    const res = await addNoteAction(project.id, note.trim())
+    if (!res.success || !res.data) { toast.error(res.error); return }
+    setNotes(prev => [...prev, res.data!])
+    setNote("")
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="lg:col-span-2 space-y-4">
+        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-black text-zentry-text-1">{project.projectType === "book" ? "Sinopsis" : "Descripción"}</h2>
+            {isOwner && !editing && <button onClick={() => setEditing(true)} className="text-xs font-bold text-zentry-accent flex items-center gap-1 cursor-pointer"><Pencil className="w-3.5 h-3.5" /> Editar</button>}
+          </div>
+          {editing ? (
+            <div className="space-y-2">
+              <input value={title} onChange={e => setTitle(e.target.value)} maxLength={120}
+                className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-sm font-bold text-zentry-text-1 focus:outline-none focus:border-zentry-accent" />
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={5}
+                className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent resize-none" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { setEditing(false); setTitle(project.title); setDescription(project.description) }} className="px-3 py-1.5 text-xs font-bold text-zentry-text-2 cursor-pointer">Cancelar</button>
+                <button onClick={save} className="px-4 py-1.5 rounded-xl bg-zentry-accent text-white text-xs font-black cursor-pointer">Guardar</button>
+              </div>
             </div>
-
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload} 
-              className="hidden" 
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-zentry-accent hover:opacity-90 active:scale-95 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all"
-            >
-              <UploadCloud className="w-4 h-4" /> Subir Archivo
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {resources.map((res) => (
-              <div 
-                key={res.id}
-                className="p-4 bg-zentry-card border border-zentry-border rounded-2xl space-y-3 hover:border-zentry-accent/50 transition-all flex flex-col justify-between"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-zentry-accent/15 border border-zentry-accent/30 text-zentry-accent flex items-center justify-center font-mono font-black text-xs shrink-0">
-                    {res.type}
-                  </div>
-                  {res.url ? (
-                    <a
-                      href={getImageUrl(res.url)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-1.5 rounded-lg text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg"
-                      title="Abrir archivo"
-                    >
-                      <Download className="w-4 h-4" />
-                    </a>
-                  ) : (
-                    <span className="p-1.5 rounded-lg text-zentry-text-2/30" title="Sin archivo adjunto (solo enlace/metadatos)">
-                      <Download className="w-4 h-4" />
-                    </span>
-                  )}
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-xs sm:text-sm text-zentry-text-1 truncate" title={res.name}>
-                    {res.name}
-                  </h4>
-                  <p className="text-[10px] text-zentry-text-2 mt-1">
-                    {res.size} • Por {res.uploadedBy} • {res.date}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
+          ) : (
+            <p className="text-sm text-zentry-text-1 whitespace-pre-line leading-relaxed">{project.description || <span className="text-zentry-text-2">Sin descripción.</span>}</p>
+          )}
+          {project.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">{project.tags.map(t => <span key={t} className="text-[11px] font-bold text-zentry-accent bg-zentry-accent/10 border border-zentry-accent/20 px-2 py-0.5 rounded-lg">#{t}</span>)}</div>
+          )}
         </div>
-      )}
 
-      {/* PESTAÑA 3: EQUIPO Y USUARIOS EN LÍNEA */}
-      {activeTab === 'team' && (
-        <div className="space-y-4">
-          
-          <div className="flex items-center justify-between bg-zentry-card p-4 rounded-2xl border border-zentry-border">
-            <div>
-              <h3 className="font-extrabold text-sm text-zentry-text-1">Creadores y Colaboradores</h3>
-              <p className="text-xs text-zentry-text-2">
-                {collaborators.filter(c => c.isOnline).length} miembros conectados ahora
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsInviteModalOpen(true)}
-              className="px-4 py-2 bg-zentry-accent hover:opacity-90 active:scale-95 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-md transition-all"
-            >
-              <Plus className="w-4 h-4" /> Invitar Creador
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-4">
-            {collaborators.map((collab) => (
-              <div 
-                key={collab.id}
-                className="p-4 bg-zentry-card border border-zentry-border rounded-2xl flex items-center justify-between gap-3 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-11 h-11 rounded-2xl bg-zentry-bg border border-zentry-border flex items-center justify-center font-extrabold text-zentry-text-1 text-sm">
-                      {collab.avatar}
-                    </div>
-                    {collab.isOnline && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-zentry-card rounded-full animate-pulse" />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-zentry-text-1 flex items-center gap-2">
-                      {collab.name}
-                      {collab.isOnline && <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.2 rounded-full">En Línea</span>}
-                    </h4>
-                    <p className="text-xs text-zentry-text-2">{collab.role}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-right text-[11px] text-zentry-text-2 font-mono">
-                    <span className="font-bold text-zentry-text-1">{tasks.filter(t => t.assignedTo === collab.name && t.completed).length}</span> tareas
-                  </div>
-                  {collab.role !== 'Líder de Proyecto' && (
-                    <button
-                      onClick={() => handleRemoveMember(collab.id)}
-                      className="p-1.5 text-zentry-text-2 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
-                      title="Quitar colaborador"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-      )}
-
-      {/* PESTAÑA 4: HISTORIAL Y ACTIVIDAD */}
-      {activeTab === 'history' && (
-        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 sm:p-6 space-y-4">
-          <h3 className="font-extrabold text-sm text-zentry-text-1 flex items-center gap-2">
-            <History className="w-4 h-4 text-zentry-accent" /> Registro Cronológico del Proyecto
-          </h3>
-
-          <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-zentry-border">
-            {activities.map((act) => (
-              <div key={act.id} className="relative group">
-                <div className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-zentry-card border-2 border-zentry-accent" />
-                <div className="bg-zentry-bg border border-zentry-border rounded-2xl p-3 text-xs space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-zentry-text-1">@{act.user}</span>
-                    <span className="text-[10px] text-zentry-text-2 font-mono">{act.time}</span>
-                  </div>
-                  <p className="text-zentry-text-2">
-                    {act.action} <span className="font-bold text-zentry-text-1">&quot;{act.target}&quot;</span>
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* PESTAÑA 5: NOTAS Y DISCUSIÓN */}
-      {activeTab === 'notes' && (
-        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 sm:p-6 space-y-4">
-          <h3 className="font-extrabold text-sm text-zentry-text-1 flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-zentry-accent" /> Notas Rápidas y Discusión del Equipo
-          </h3>
-
-          <div className="space-y-3 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
-            {notes.map((note) => (
-              <div key={note.id} className="p-3.5 rounded-2xl bg-zentry-bg border border-zentry-border space-y-1">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-extrabold text-zentry-text-1">{note.user}</span>
-                  <span className="text-[10px] text-zentry-text-2 font-mono">{note.time}</span>
-                </div>
-                <p className="text-xs text-zentry-text-2 leading-relaxed">{note.text}</p>
-              </div>
-            ))}
-          </div>
-
-          <form onSubmit={handleSendNote} className="flex gap-2 pt-2 border-t border-zentry-border">
-            <input 
-              type="text" 
-              value={newNoteText}
-              onChange={e => setNewNoteText(e.target.value)}
-              placeholder="Escribe una nota o actualización para el equipo..."
-              className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-xs sm:text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
-            />
-            <button 
-              type="submit" 
-              disabled={!newNoteText.trim() || isPending}
-              className="px-4 py-2.5 bg-zentry-accent text-white rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL PARA INVITAR COLABORADOR */}
-      <AnimatePresence>
-        {isInviteModalOpen && (
-          <div 
-            onClick={() => setIsInviteModalOpen(false)}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-sm overflow-hidden p-6 shadow-2xl space-y-4"
-            >
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-zentry-accent/15 border border-zentry-accent/30 text-zentry-accent flex items-center justify-center mx-auto">
-                  <Users className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-extrabold text-zentry-text-1">Invitar Creador</h3>
-                <p className="text-xs text-zentry-text-2">Ingresa el @username del usuario para sumarlo al equipo.</p>
-              </div>
-
-              <form onSubmit={handleInvite} className="space-y-4">
-                <input 
-                  autoFocus
-                  type="text" 
-                  value={inviteUsername}
-                  onChange={e => setInviteUsername(e.target.value)}
-                  placeholder="@usuario_zentry"
-                  className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-xs sm:text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent"
-                />
-
-                <div className="flex gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsInviteModalOpen(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-zentry-border text-xs font-bold text-zentry-text-2 hover:bg-zentry-bg"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="flex-1 py-2.5 rounded-xl bg-zentry-accent text-white text-xs font-black hover:opacity-90 shadow-md shadow-zentry-accent/20"
-                  >
-                    Enviar Invitación
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+        {isMember && (
+          <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 space-y-3">
+            <h2 className="text-sm font-black text-zentry-text-1 flex items-center gap-1.5"><StickyNote className="w-4 h-4 text-amber-400" /> Notas del equipo</h2>
+            <ul className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+              {notes.length === 0 && <li className="text-xs text-zentry-text-2">Sin notas todavía.</li>}
+              {notes.map(n => (
+                <li key={n.id} className="p-3 rounded-2xl bg-zentry-bg border border-zentry-border">
+                  <p className="text-[11px] text-zentry-text-2"><span className="font-bold text-zentry-text-1">@{n.authorUsername}</span> · {timeAgo(n.createdAt)}</p>
+                  <p className="text-sm text-zentry-text-1 whitespace-pre-line mt-1">{n.content}</p>
+                </li>
+              ))}
+            </ul>
+            <form onSubmit={addNote} className="flex gap-2">
+              <input value={note} onChange={e => setNote(e.target.value)} placeholder="Escribe una nota para el equipo…"
+                className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent" />
+              <button type="submit" disabled={!note.trim()} className="px-3 rounded-xl bg-zentry-accent text-white disabled:opacity-40 cursor-pointer" aria-label="Guardar nota"><Plus className="w-4 h-4" /></button>
+            </form>
           </div>
         )}
-      </AnimatePresence>
+      </section>
 
+      <aside className="space-y-4">
+        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 space-y-3">
+          <h2 className="text-sm font-black text-zentry-text-1">Estado</h2>
+          {isOwner ? (
+            <select value={project.status} onChange={e => onUpdate({ status: e.target.value }, "Estado actualizado")}
+              className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-xs text-zentry-text-1 focus:outline-none">
+              <option value="active">En progreso</option>
+              <option value="paused">En pausa</option>
+              <option value="completed">Completado</option>
+            </select>
+          ) : (
+            <p className="text-xs text-zentry-text-1">{(STATUS_LABELS[project.status] ?? STATUS_LABELS.active).label}</p>
+          )}
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <button onClick={() => onGo("team")} className="p-3 rounded-2xl bg-zentry-bg border border-zentry-border cursor-pointer"><p className="text-lg font-black text-zentry-text-1">{project.membersCount || project.members.length}</p><p className="text-[10px] text-zentry-text-2">Miembros</p></button>
+            <button onClick={() => onGo("drive")} className="p-3 rounded-2xl bg-zentry-bg border border-zentry-border cursor-pointer"><p className="text-lg font-black text-zentry-text-1">{(project.resources || []).filter(r => !r.isFolder).length}</p><p className="text-[10px] text-zentry-text-2">Archivos</p></button>
+            {project.projectType === "book" && <button onClick={() => onGo("work")} className="p-3 rounded-2xl bg-zentry-bg border border-zentry-border cursor-pointer"><p className="text-lg font-black text-zentry-text-1">{project.chaptersCount || 0}</p><p className="text-[10px] text-zentry-text-2">Capítulos</p></button>}
+            {isMember && <button onClick={() => onGo("tasks")} className="p-3 rounded-2xl bg-zentry-bg border border-zentry-border cursor-pointer"><p className="text-lg font-black text-zentry-text-1">{project.progress}%</p><p className="text-[10px] text-zentry-text-2">Tareas</p></button>}
+          </div>
+          <p className="text-[11px] text-zentry-text-2">Fecha límite: {project.deadline}</p>
+        </div>
+
+        <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 space-y-3">
+          <h2 className="text-sm font-black text-zentry-text-1 flex items-center gap-1.5"><Activity className="w-4 h-4 text-zentry-accent" /> Actividad</h2>
+          <ul className="space-y-2.5 max-h-80 overflow-y-auto custom-scrollbar">
+            {[...(project.activities || [])].reverse().slice(0, 30).map(a => (
+              <li key={a.id} className="text-xs text-zentry-text-2">
+                <span className="font-bold text-zentry-text-1">@{a.user}</span> {a.action} <span className="text-zentry-text-1">{a.target}</span>
+                <span className="block text-[10px]">{timeAgo(a.time)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
     </div>
-  );
+  )
+}
+
+function Tasks({ project, onChange }: { project: Project; onChange: (c: Partial<Project>) => void }) {
+  const [tasks, setTasks] = useState<ProjectTask[]>(project.tasks || [])
+  const [title, setTitle] = useState("")
+  const [priority, setPriority] = useState("media")
+  const [assignee, setAssignee] = useState("")
+
+  const sync = (next: ProjectTask[]) => {
+    setTasks(next)
+    const done = next.filter(t => t.completed).length
+    onChange({ tasks: next, tasksCount: next.length, completedTasksCount: done, progress: next.length ? Math.round((done / next.length) * 100) : 0 })
+  }
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+    const res = await addProjectTaskAction(project.id, { title: title.trim(), priority, assignedTo: assignee || undefined })
+    if (!res.success || !res.data) { toast.error(res.error); return }
+    sync([...tasks, res.data])
+    setTitle("")
+  }
+
+  const toggle = async (task: ProjectTask) => {
+    sync(tasks.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t))
+    const res = await toggleProjectTaskAction(project.id, task.id)
+    if (!res.success) { sync(tasks); toast.error("No se pudo actualizar la tarea") }
+  }
+
+  const remove = async (task: ProjectTask) => {
+    const res = await deleteTaskAction(project.id, task.id)
+    if (!res.success) { toast.error("No se pudo eliminar"); return }
+    sync(tasks.filter(t => t.id !== task.id))
+  }
+
+  const done = tasks.filter(t => t.completed).length
+  return (
+    <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-black text-zentry-text-1">Tareas del equipo</h2>
+        <span className="text-xs text-zentry-text-2">{done}/{tasks.length} completadas</span>
+      </div>
+      <div className="h-2 rounded-full bg-zentry-bg overflow-hidden"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} /></div>
+      <form onSubmit={add} className="flex flex-col sm:flex-row gap-2">
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Nueva tarea…"
+          className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent" />
+        <select value={assignee} onChange={e => setAssignee(e.target.value)} aria-label="Asignar a"
+          className="bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-xs text-zentry-text-1">
+          <option value="">Asignar a mí</option>
+          {project.members.map(m => <option key={m.id} value={m.handle}>@{m.handle}</option>)}
+        </select>
+        <select value={priority} onChange={e => setPriority(e.target.value)} aria-label="Prioridad"
+          className="bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-xs text-zentry-text-1">
+          <option value="baja">Baja</option><option value="media">Media</option><option value="alta">Alta</option><option value="urgente">Urgente</option>
+        </select>
+        <button type="submit" disabled={!title.trim()} className="px-4 py-2 rounded-xl bg-zentry-accent text-white text-xs font-black disabled:opacity-40 cursor-pointer">Añadir</button>
+      </form>
+      <ul className="space-y-2">
+        {tasks.length === 0 && <li className="text-xs text-zentry-text-2">Sin tareas todavía.</li>}
+        {tasks.map(t => (
+          <li key={t.id} className="flex items-center gap-3 p-3 rounded-2xl bg-zentry-bg border border-zentry-border">
+            <input type="checkbox" checked={t.completed} onChange={() => toggle(t)} className="w-4 h-4 accent-emerald-500 cursor-pointer" aria-label={`Completar ${t.title}`} />
+            <span className={cn("flex-1 text-sm", t.completed ? "line-through text-zentry-text-2" : "text-zentry-text-1")}>{t.title}</span>
+            {t.assignedTo && <span className="text-[10px] text-zentry-text-2">@{t.assignedTo}</span>}
+            <span className="text-[10px] font-bold uppercase text-zentry-text-2">{t.priority}</span>
+            <button onClick={() => remove(t)} aria-label="Eliminar tarea" className="p-1 text-zentry-text-2 hover:text-red-400 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Team({ project, isOwner, onChange }: { project: Project; isOwner: boolean; onChange: (members: ProjectMember[]) => void }) {
+  const [handle, setHandle] = useState("")
+  const [inviting, setInviting] = useState(false)
+
+  const invite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!handle.trim()) return
+    setInviting(true)
+    const res = await inviteProjectMemberAction(project.id, handle.trim())
+    setInviting(false)
+    if (!res.success || !res.data) { toast.error(res.error); return }
+    onChange([...project.members, res.data])
+    setHandle("")
+    toast.success(`@${res.data.handle} se unió al proyecto`)
+  }
+
+  const kick = async (m: ProjectMember) => {
+    if (!m.username || !window.confirm(`¿Quitar a @${m.handle} del proyecto?`)) return
+    const res = await removeProjectMemberAction(project.id, m.username)
+    if (!res.success) { toast.error(res.error); return }
+    onChange(project.members.filter(x => x.id !== m.id))
+  }
+
+  return (
+    <div className="bg-zentry-card border border-zentry-border rounded-3xl p-5 space-y-4">
+      <h2 className="text-sm font-black text-zentry-text-1">Equipo ({project.members.length})</h2>
+      {isOwner && (
+        <form onSubmit={invite} className="flex gap-2">
+          <input value={handle} onChange={e => setHandle(e.target.value)} placeholder="@usuario o email del colaborador"
+            className="flex-1 bg-zentry-bg border border-zentry-border rounded-xl px-3 py-2 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent" />
+          <button type="submit" disabled={inviting || !handle.trim()} className="px-4 py-2 rounded-xl bg-zentry-accent text-white text-xs font-black flex items-center gap-1.5 disabled:opacity-40 cursor-pointer">
+            {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />} Agregar
+          </button>
+        </form>
+      )}
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {project.members.map(m => (
+          <li key={m.id} className="flex items-center gap-3 p-3 rounded-2xl bg-zentry-bg border border-zentry-border">
+            <Link href={`/profile/${m.handle}`}><UserAvatar name={m.name} avatarUrl={m.avatarUrl} cosmetics={m.cosmetics} size={40} /></Link>
+            <div className="min-w-0 flex-1">
+              <Link href={`/profile/${m.handle}`} className="text-sm font-bold text-zentry-text-1 truncate block hover:text-zentry-accent">{m.name}</Link>
+              <p className="text-[11px] text-zentry-text-2 flex items-center gap-1">@{m.handle} · {m.isOwner ? <><Crown className="w-3 h-3 text-amber-400" /> Líder</> : "Colaborador"}</p>
+            </div>
+            {isOwner && !m.isOwner && (
+              <button onClick={() => kick(m)} aria-label={`Quitar a ${m.handle}`} className="p-1.5 rounded-lg text-zentry-text-2 hover:text-red-400 hover:bg-red-500/10 cursor-pointer"><X className="w-4 h-4" /></button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }

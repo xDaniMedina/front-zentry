@@ -1,5 +1,7 @@
 "use client"
 
+import { useMyAvatar } from "@/lib/hooks/useMyAvatar"
+import { themePresetFor } from "@/lib/themes";
 import { useState } from "react"
 import { Sparkles, Coins, CheckCircle2, Flame } from "lucide-react"
 import { toast } from "sonner"
@@ -7,7 +9,7 @@ import { useAuth } from "@/context/AuthContext"
 import { ShopItem, rarityRingClass, rarityGradientClass } from "@/lib/shop"
 import { getStoreCatalogAction, getEquippedItemsAction, buyShopItemAction, equipShopItemAction } from "@/lib/actions/shop"
 import { getWalletBalance } from "@/lib/actions/wallet"
-import useSWR from "swr"
+import useSWR, { mutate } from "swr"
 import { getInitials, getImageUrl } from "@/lib/utils"
 import MissionsModal from "@/components/feed/MissionsModal"
 import Image from "next/image"
@@ -20,12 +22,13 @@ export default function ShopClient() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isMissionsOpen, setIsMissionsOpen] = useState(false);
 
-  const { data: walletRes } = useSWR('walletBalance', getWalletBalance, { refreshInterval: 15000 });
+  const { data: walletRes } = useSWR('walletBalance', getWalletBalance, { refreshInterval: 60000 });
   const { data: catalogRes, mutate: mutateCatalog } = useSWR('storeCatalog', getStoreCatalogAction);
   const { data: equippedRes, mutate: mutateEquipped } = useSWR('equippedItems', getEquippedItemsAction);
 
   const items = catalogRes?.items || [];
   const equipped = equippedRes?.equipped || {};
+  const myAvatar = useMyAvatar();
   const coins = walletRes?.coins ?? user?.zentry_coins ?? 0;
   const ownedCount = items.filter(i => i.owned).length;
 
@@ -36,6 +39,9 @@ export default function ShopClient() {
       return;
     }
     await mutateCatalog();
+    // El saldo baja en la tienda, la billetera y el sidebar a la vez
+    mutate('walletBalance');
+    mutate('userStats');
 
     const equipRes = await equipShopItemAction(item.id);
     if (equipRes.equipped) mutateEquipped({ success: true, equipped: equipRes.equipped }, { revalidate: false });
@@ -88,8 +94,8 @@ export default function ShopClient() {
           <div className="flex flex-col sm:flex-row items-center gap-4 bg-[#0a0a14]/80 p-4 sm:p-5 rounded-3xl border border-zinc-700/60 shadow-xl backdrop-blur-md">
             <div className="relative flex items-center justify-center">
               <div className={`w-16 h-16 rounded-full bg-purple-900/50 border-2 border-purple-500 flex items-center justify-center font-black text-lg text-purple-300 shadow-md relative overflow-hidden ${equippedFrameItem ? rarityRingClass(equippedFrameItem.rarity) : ''}`}>
-                {user?.avatar_url ? (
-                  <Image src={getImageUrl(user.avatar_url)} alt="Avatar" fill sizes="64px" className="object-cover rounded-full" />
+                {myAvatar ? (
+                  <Image src={getImageUrl(myAvatar)} alt="Avatar" fill sizes="64px" className="object-cover rounded-full" />
                 ) : (
                   getInitials(user?.name || cleanUsername)
                 )}
@@ -201,11 +207,25 @@ export default function ShopClient() {
               <div className="h-32 rounded-2xl bg-[#0a0a14] border border-zinc-800/80 flex items-center justify-center relative overflow-hidden group">
                 {item.category === 'frames' ? (
                   <div className={`relative overflow-hidden w-16 h-16 rounded-full bg-purple-900/40 border border-purple-400/50 flex items-center justify-center font-black text-xl text-purple-300 ${rarityRingClass(item.rarity)}`}>
-                    {user?.avatar_url ? (
-                      <Image src={getImageUrl(user.avatar_url)} alt="Preview" fill sizes="64px" className="object-cover rounded-full" />
+                    {myAvatar ? (
+                      <Image src={getImageUrl(myAvatar)} alt="Preview" fill sizes="64px" className="object-cover rounded-full" />
                     ) : (
                       getInitials(user?.name || cleanUsername)
                     )}
+                  </div>
+                ) : item.category === 'themes' && themePresetFor(item.name) ? (
+                  // Vista previa real del tema: el fondo y el acento que tendrá toda la plataforma
+                  <div
+                    className="w-full h-full rounded-2xl flex flex-col items-center justify-center gap-2 bg-zentry-bg"
+                    style={{ backgroundImage: themePresetFor(item.name)!.background }}
+                  >
+                    <span className="text-3xl filter drop-shadow-md">{item.icon}</span>
+                    <span
+                      className="px-3 py-1 rounded-full text-[10px] font-black text-white shadow-md"
+                      style={{ backgroundColor: themePresetFor(item.name)!.accent }}
+                    >
+                      Color de acento
+                    </span>
                   </div>
                 ) : item.category === 'banners' ? (
                   <div className={`w-full h-full rounded-2xl flex items-center justify-center p-3 text-center ${rarityGradientClass(item.rarity)}`}>
@@ -235,7 +255,7 @@ export default function ShopClient() {
                         : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-600/30 active:scale-95'
                     }`}
                   >
-                    {isEquipped ? 'Desequipar' : '✨ Equipar en Perfil'}
+                    {isEquipped ? 'Desequipar' : item.category === 'themes' ? '🎨 Aplicar tema' : '✨ Equipar en Perfil'}
                   </button>
                 ) : (
                   <button

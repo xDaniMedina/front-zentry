@@ -1,15 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/*
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-@custom-variant dark (&:is(.dark *));
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-*/
 
 @theme {
   --color-zentry-bg: var(--bg-app);
@@ -74,11 +65,8 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2dd4bf;
+  background: var(--accent);
   border-radius: 6px;
-}
-.theme-special ::-webkit-scrollbar-thumb {
-    background: #a855f7;
 }
 
 /* Estilos básicos para las tarjetas que se aplicarán globalmente */
@@ -97,6 +85,3 @@ body {
     --accent: #2dd4bf; /* Teal/Azul verdoso para el especial */
     --border: #1d2b3e;
 }
-
-@import "tailwindcss";
-

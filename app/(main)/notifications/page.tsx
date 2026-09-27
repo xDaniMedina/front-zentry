@@ -1,13 +1,17 @@
 "use client"
 
 import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { mutate } from "swr";
 import {
   Bell, Heart, UserPlus, Star, CheckCheck, MessageSquare, Trash2,
-  Sparkles, Loader2, UserCheck
+  Sparkles, Loader2, UserCheck, Trophy, Smile, Reply, Send, Flame, FolderKanban, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Notification } from "@/types";
+import { getImageUrl, getInitials, timeAgo } from "@/lib/utils";
 import {
   getNotificationsAction,
   markNotificationReadAction,
@@ -19,14 +23,32 @@ function getNotificationIcon(type: Notification['type']) {
   switch (type) {
     case 'like':
       return { icon: Heart, color: 'text-red-500', bg: 'bg-red-500/10' };
+    case 'comment_like':
+      return { icon: Heart, color: 'text-pink-400', bg: 'bg-pink-500/10' };
     case 'comment':
       return { icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+    case 'story_reaction':
+      return { icon: Smile, color: 'text-orange-400', bg: 'bg-orange-500/10' };
+    case 'story_reply':
+      return { icon: Reply, color: 'text-orange-400', bg: 'bg-orange-500/10' };
+    case 'message':
+      return { icon: Send, color: 'text-sky-400', bg: 'bg-sky-500/10' };
     case 'follow':
-      return { icon: UserPlus, color: 'text-blue-500', bg: 'bg-blue-500/10' };
     case 'friend_request':
       return { icon: UserPlus, color: 'text-blue-500', bg: 'bg-blue-500/10' };
     case 'friend_accept':
       return { icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+    case 'achievement':
+      return { icon: Trophy, color: 'text-amber-400', bg: 'bg-amber-500/10' };
+    case 'mission':
+      return { icon: CheckCheck, color: 'text-emerald-400', bg: 'bg-emerald-500/10' };
+    case 'streak':
+      return { icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10' };
+    case 'project_invite':
+    case 'project_message':
+      return { icon: FolderKanban, color: 'text-indigo-400', bg: 'bg-indigo-500/10' };
+    case 'community':
+      return { icon: Users, color: 'text-teal-400', bg: 'bg-teal-500/10' };
     case 'reward':
       return { icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' };
     case 'system':
@@ -35,11 +57,45 @@ function getNotificationIcon(type: Notification['type']) {
   }
 }
 
+/** A dónde lleva cada notificación al tocarla. */
+function getNotificationHref(n: Notification): string | null {
+  switch (n.type) {
+    case 'like':
+    case 'comment':
+    case 'comment_like':
+      return n.relatedId ? `/feed?post=${n.relatedId}` : '/feed';
+    case 'message':
+    case 'story_reply':
+      return n.sourceUsername ? `/messages?user=${encodeURIComponent(n.sourceUsername)}` : '/messages';
+    case 'story_reaction':
+      return '/feed';
+    case 'follow':
+    case 'friend_accept':
+      return n.sourceUsername ? `/profile/${encodeURIComponent(n.sourceUsername)}` : null;
+    case 'friend_request':
+      return '/friends';
+    case 'achievement':
+    case 'reward':
+      return '/wallet';
+    case 'mission':
+    case 'streak':
+      return '/feed?missions=1';
+    case 'project_invite':
+    case 'project_message':
+      return n.relatedId ? `/projects/${n.relatedId}` : '/projects';
+    case 'community':
+      return '/communities';
+    default:
+      return null;
+  }
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [, startTransition] = useTransition();
+  const router = useRouter();
 
   // Cargar notificaciones reales desde el backend al montar (nunca datos de relleno)
   useEffect(() => {
@@ -67,7 +123,14 @@ export default function NotificationsPage() {
 
     startTransition(async () => {
       await markNotificationReadAction(id);
+      mutate('unreadNotifications');
     });
+  };
+
+  const handleOpen = (n: Notification) => {
+    if (!n.read) handleMarkAsRead(n.id);
+    const href = getNotificationHref(n);
+    if (href) router.push(href);
   };
 
   const handleMarkAllAsRead = () => {
@@ -77,6 +140,7 @@ export default function NotificationsPage() {
 
     startTransition(async () => {
       await markAllNotificationsReadAction();
+      mutate('unreadNotifications');
     });
   };
 
@@ -87,6 +151,7 @@ export default function NotificationsPage() {
 
     startTransition(async () => {
       await clearNotificationsAction();
+      mutate('unreadNotifications');
     });
   };
 
@@ -174,12 +239,15 @@ export default function NotificationsPage() {
             const iconConfig = getNotificationIcon(n.type);
             const IconComponent = iconConfig.icon;
             const notifText = n.text || n.content || "Nueva notificación en Zentry";
-            const notifTime = n.time || (n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+            const notifTime = n.time || timeAgo(n.created_at);
 
             return (
               <div 
                 key={n.id} 
-                onClick={() => handleMarkAsRead(n.id)}
+                onClick={() => handleOpen(n)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleOpen(n); }}
                 className={`p-4 rounded-2xl flex items-center gap-4 transition-all cursor-pointer border ${
                   n.read 
                     ? 'bg-zentry-card/60 border-zentry-border/60 hover:bg-zentry-card' 
@@ -189,10 +257,23 @@ export default function NotificationsPage() {
                 {/* Indicador lateral para no leídas */}
                 {!n.read && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-zentry-accent" />}
 
-                {/* Icono */}
-                <div className={`p-3 rounded-2xl shrink-0 ${iconConfig.bg} ${iconConfig.color}`}>
-                  <IconComponent className="w-5 h-5"/>
-                </div>
+                {/* Foto de quien la envía (con el ícono del tipo) o solo el ícono */}
+                {n.sourceUsername ? (
+                  <div className="relative shrink-0">
+                    <div className="relative w-11 h-11 rounded-2xl overflow-hidden bg-zentry-accent/15 border border-zentry-border flex items-center justify-center text-xs font-black text-zentry-accent">
+                      {n.sourceAvatarUrl ? (
+                        <Image src={getImageUrl(n.sourceAvatarUrl)} alt={n.sourceUsername} fill sizes="44px" className="object-cover" />
+                      ) : getInitials(n.sourceUsername)}
+                    </div>
+                    <span className={`absolute -bottom-1 -right-1 p-1 rounded-full border-2 border-zentry-card ${iconConfig.bg} ${iconConfig.color} bg-zentry-card`}>
+                      <IconComponent className="w-3 h-3" />
+                    </span>
+                  </div>
+                ) : (
+                  <div className={`p-3 rounded-2xl shrink-0 ${iconConfig.bg} ${iconConfig.color}`}>
+                    <IconComponent className="w-5 h-5"/>
+                  </div>
+                )}
 
                 {/* Contenido */}
                 <div className="flex-1 min-w-0">

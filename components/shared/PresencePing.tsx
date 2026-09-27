@@ -2,59 +2,44 @@
 
 import { useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { fetchAPI } from '@/lib/api'
 
+const PING_MS = 25_000
+
+/**
+ * Mantiene al usuario "en línea" mientras tenga Zentry abierto (aunque cambie de pestaña).
+ * - Ping cada 25 s y al volver a la pestaña; el backend considera en línea 90 s tras el último.
+ * - "Desconectado" solo al cerrar/abandonar la página (no al cambiar de pestaña).
+ * Todo pasa por /api/presence para que el JWT de la cookie HTTP-Only viaje al backend.
+ */
 export default function PresencePing() {
   const { user } = useAuth()
 
   useEffect(() => {
     if (!user) return
 
-    const sendOnlinePing = async () => {
-      try {
-        await fetchAPI('/api/core/friends/presence/ping?status=online', { method: 'POST' })
-      } catch {
-        // Silent
+    const ping = (status: 'online' | 'offline') => {
+      const url = `/api/presence?status=${status}`
+      if (status === 'offline' && navigator.sendBeacon) {
+        navigator.sendBeacon(url)
+        return
       }
+      fetch(url, { method: 'POST', keepalive: true }).catch(() => {})
     }
 
-    const sendOfflinePing = () => {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-          navigator.sendBeacon(`${apiUrl}/api/core/friends/presence/ping?status=offline`)
-        } else {
-          fetch(`${apiUrl}/api/core/friends/presence/ping?status=offline`, {
-            method: 'POST',
-            keepalive: true
-          }).catch(() => {})
-        }
-      } catch {
-        // Silent
-      }
-    }
+    ping('online')
+    const interval = setInterval(() => ping('online'), PING_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') ping('online') }
+    const onLeave = () => ping('offline')
 
-    sendOnlinePing()
-    const interval = setInterval(sendOnlinePing, 30000) // Pings cada 30 segundos
-
-    const handleVisibilityOrUnload = () => {
-      if (document.visibilityState === 'hidden') {
-        sendOfflinePing()
-      } else if (document.visibilityState === 'visible') {
-        sendOnlinePing()
-      }
-    }
-
-    window.addEventListener('beforeunload', sendOfflinePing)
-    window.addEventListener('pagehide', sendOfflinePing)
-    document.addEventListener('visibilitychange', handleVisibilityOrUnload)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener('pagehide', onLeave)
 
     return () => {
       clearInterval(interval)
-      window.removeEventListener('beforeunload', sendOfflinePing)
-      window.removeEventListener('pagehide', sendOfflinePing)
-      document.removeEventListener('visibilitychange', handleVisibilityOrUnload)
-      sendOfflinePing()
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener('pagehide', onLeave)
     }
   }, [user])
 

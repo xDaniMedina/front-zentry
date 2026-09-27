@@ -1,5 +1,8 @@
 "use client"
 
+import { useMyAvatar } from "@/lib/hooks/useMyAvatar"
+import { getProfileByUserIdAction, getProfileByUsernameAction } from "@/lib/actions/profile";
+import { rarityRingClass, ShopRarity } from "@/lib/shop";
 import { useState, useRef, useEffect, useCallback, useTransition, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -21,10 +24,17 @@ import {
   deleteMessageAction,
 } from "@/lib/actions/messages"
 import { getFriendsAction } from "@/lib/actions/friends"
-import { getInitials, getImageUrl } from "@/lib/utils"
+import { getInitials, getImageUrl, timeAgo } from "@/lib/utils"
 import { useConversationSocket } from "@/lib/hooks/useConversationSocket"
 
 const EMOJI_LIST = ["😀", "😂", "🥰", "😍", "🔥", "❤️", "👍", "🙌", "🚀", "🎉", "✨", "🎨", "💯", "⚡", "👏", "😎", "🤩", "🤯", "💎", "🌟", "👾", "👑", "💪", "💡"];
+
+
+/** otherUserFrame trae la rareza del marco equipado (COMMON/RARE/EPIC/LEGENDARY). */
+function getFrameClass(frameRarity?: string | null): string {
+  if (!frameRarity) return 'border border-zinc-700';
+  return rarityRingClass(frameRarity.toLowerCase() as ShopRarity);
+}
 
 function mergeMessages(current: Message[], incoming: Message): Message[] {
   if (current.some(m => m.id === incoming.id)) {
@@ -37,6 +47,7 @@ function MessagesInner() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const currentUserId = Number(user?.id) || null;
+  const myAvatar = useMyAvatar();
 
   const userParam = searchParams.get('user') || searchParams.get('username');
 
@@ -64,15 +75,41 @@ function MessagesInner() {
     (c: Conversation): Conversation => {
       if (c.isGroup) return { ...c, displayName: c.name || "Grupo" };
       const friend = friendById(c.otherUserId);
+      const name = friend?.name || c.otherName || c.displayName;
+      const username = friend?.username || c.otherUsername;
+      const avatar = friend?.avatar_url || c.otherAvatarUrl || c.displayAvatarUrl || null;
       return {
         ...c,
-        displayName: friend?.name || friend?.username || `Usuario #${c.otherUserId}`,
-        displayAvatarUrl: friend?.avatar_url ?? null,
-        isOnline: Boolean(friend?.is_online),
+        displayName: name || (username ? `@${username}` : `Usuario #${c.otherUserId}`),
+        otherUsername: username || c.otherUsername,
+        otherName: name || c.otherName,
+        displayAvatarUrl: avatar,
+        otherUserFrame: c.otherUserFrame || null,
+        otherUserPet: c.otherUserPet || null,
+        otherUserTitle: c.otherUserTitle || null,
+        isOnline: Boolean(c.otherUserOnline ?? friend?.is_online),
       };
     },
     [friendById]
   );
+
+  // Nombres/fotos de quien escribe en chats de grupo (p. ej. el chat de un proyecto)
+  const [senders, setSenders] = useState<Record<number, { name: string; avatarUrl?: string | null }>>({});
+  const requestedSenders = useRef(new Set<number>());
+  const senderInfo = useCallback((senderId: number) => {
+    const friend = friendById(senderId);
+    if (friend) return { name: friend.username || friend.name, avatarUrl: friend.avatar_url };
+    if (senders[senderId]) return senders[senderId];
+    if (!requestedSenders.current.has(senderId)) {
+      requestedSenders.current.add(senderId);
+      getProfileByUserIdAction(senderId).then(res => {
+        if (res.success && res.data) {
+          setSenders(prev => ({ ...prev, [senderId]: { name: res.data.username, avatarUrl: res.data.avatarUrl || res.data.avatar_url } }));
+        }
+      });
+    }
+    return { name: `usuario ${senderId}`, avatarUrl: null };
+  }, [friendById, senders]);
 
   // 1. Cargar amigos y bandeja de conversaciones reales del backend
   useEffect(() => {
@@ -89,11 +126,19 @@ function MessagesInner() {
       const resolved = convsRes.data.map(c => {
         if (c.isGroup) return { ...c, displayName: c.name || "Grupo" };
         const friend = friendsList.find(f => Number(f.id) === c.otherUserId);
+        const name = friend?.name || c.otherName || c.displayName;
+        const username = friend?.username || c.otherUsername;
+        const avatar = friend?.avatar_url || c.otherAvatarUrl || c.displayAvatarUrl || null;
         return {
           ...c,
-          displayName: friend?.name || friend?.username || `Usuario #${c.otherUserId}`,
-          displayAvatarUrl: friend?.avatar_url ?? null,
-          isOnline: Boolean(friend?.is_online),
+          displayName: name || (username ? `@${username}` : `Usuario #${c.otherUserId}`),
+          otherUsername: username || c.otherUsername,
+          otherName: name || c.otherName,
+          displayAvatarUrl: avatar,
+          otherUserFrame: c.otherUserFrame || null,
+          otherUserPet: c.otherUserPet || null,
+          otherUserTitle: c.otherUserTitle || null,
+          isOnline: Boolean(c.otherUserOnline ?? friend?.is_online),
         };
       });
       setChats(resolved);
@@ -109,20 +154,24 @@ function MessagesInner() {
 
   // 2. Abrir/crear chat cuando llega ?user=<username> desde un perfil
   useEffect(() => {
-    if (!userParam || friends.length === 0) return;
+    if (!userParam || loadingChats) return;
 
     const clean = userParam.replace(/^@/, '').toLowerCase();
-    const friend = friends.find(f => f.username?.toLowerCase() === clean);
-    if (!friend) return;
-
-    const friendId = Number(friend.id);
-    const existing = chats.find(c => c.otherUserId === friendId);
-    if (existing) {
-      setActiveChatId(existing.id);
-      return;
-    }
 
     (async () => {
+      // Amigo o no: se resuelve el id por su perfil público
+      const friend = friends.find(f => f.username?.toLowerCase() === clean);
+      let friendId = friend ? Number(friend.id) : null;
+      if (friendId == null) {
+        const profile = await getProfileByUsernameAction(clean);
+        friendId = profile.success && profile.data?.userId ? Number(profile.data.userId) : null;
+      }
+      if (friendId == null) { toast.error(`No encontramos a @${clean}`); return; }
+      if (friendId === currentUserId) return;
+
+      const existing = chats.find(c => c.otherUserId === friendId);
+      if (existing) { setActiveChatId(existing.id); return; }
+
       const res = await startDirectConversation(friendId);
       if (res.success && res.data) {
         const conv = resolveDisplay({ ...res.data, unreadCount: 0 } as Conversation);
@@ -133,7 +182,47 @@ function MessagesInner() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userParam, friends]);
+  }, [userParam, loadingChats]);
+
+  // Refresco periódico de la bandeja (presencia, último mensaje y no leídos) sin perder mensajes cargados
+  useEffect(() => {
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const res = await getConversations();
+      if (!res.success) return;
+      setChats(prev => {
+        const byId = new Map(prev.map(c => [c.id, c]));
+        return res.data.map(c => {
+          const old = byId.get(c.id);
+          const fresh = resolveDisplay(c);
+          return old ? { ...fresh, messages: old.messages, unreadCount: c.id === activeChatId ? 0 : fresh.unreadCount } : fresh;
+        });
+      });
+    };
+    const id = setInterval(refresh, 30000);
+    return () => clearInterval(id);
+  }, [resolveDisplay, activeChatId]);
+
+  // Mensajes en vivo de las conversaciones que NO están abiertas: último mensaje + no leídos + orden
+  const chatIdsKey = chats.map(c => c.id).join(',');
+  useEffect(() => {
+    if (!connected) return;
+    const ids = chatIdsKey ? chatIdsKey.split(',').map(Number).filter(id => id !== activeChatId) : [];
+    const unsubscribers = ids.map(id => subscribeToConversation(id, (incoming) => {
+      setChats(prev => {
+        const updated = prev.map(c => c.id === id ? {
+          ...c,
+          lastMessageContent: incoming.content,
+          lastMessageAt: incoming.createdAt,
+          lastMessageSenderId: incoming.senderId,
+          unreadCount: incoming.senderId === currentUserId ? c.unreadCount : c.unreadCount + 1,
+          messages: c.messages ? mergeMessages(c.messages, incoming) : c.messages,
+        } : c);
+        return [...updated].sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime());
+      });
+    }));
+    return () => unsubscribers.forEach(u => u());
+  }, [chatIdsKey, activeChatId, connected, subscribeToConversation, currentUserId]);
 
   const activeChat = chats.find(c => c.id === activeChatId) || null;
 
@@ -254,8 +343,8 @@ function MessagesInner() {
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="relative w-10 h-10 rounded-full bg-zentry-accent/20 border-2 border-zentry-accent flex items-center justify-center font-black text-xs text-zentry-accent shadow-inner overflow-hidden">
-                {user?.avatar_url ? (
-                  <Image src={getImageUrl(user.avatar_url)} alt={user.username || "avatar"} fill sizes="40px" className="object-cover rounded-full" />
+                {myAvatar ? (
+                  <Image src={getImageUrl(myAvatar)} alt={user?.username || "avatar"} fill sizes="40px" className="object-cover rounded-full" />
                 ) : (
                   getInitials(user?.name || user?.username || 'ZE')
                 )}
@@ -350,18 +439,33 @@ function MessagesInner() {
                   className={`p-3.5 cursor-pointer transition-all flex items-center gap-3 ${isSelected ? 'bg-[#1e1e32] border-l-4 border-l-zentry-accent' : 'hover:bg-[#151524]'}`}
                 >
                   <div className="relative shrink-0">
-                    <div className="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-black text-xs text-white shadow-sm overflow-hidden">
+                    <div className={`relative w-11 h-11 rounded-full bg-zinc-800 flex items-center justify-center font-black text-xs text-white shadow-sm overflow-hidden ${getFrameClass(chat.otherUserFrame)}`}>
                       {chat.displayAvatarUrl ? (
                         <Image src={getImageUrl(chat.displayAvatarUrl)} alt={chat.displayName} fill sizes="44px" className="object-cover" />
                       ) : (
                         getInitials(chat.displayName)
                       )}
                     </div>
+                    {chat.otherUserPet && (
+                      <span className="absolute -bottom-1 -left-1 text-xs select-none" title={`Mascota: ${chat.otherUserPet}`}>
+                        {chat.otherUserPet}
+                      </span>
+                    )}
                     {chat.isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#11111c] rounded-full" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline mb-0.5">
-                      <h4 className="font-bold text-xs text-white truncate">{chat.displayName}</h4>
+                      <div className="flex items-center gap-1.5 min-w-0 truncate">
+                        <h4 className="font-bold text-xs text-white truncate">{chat.displayName}</h4>
+                        {chat.otherUsername && (
+                          <span className="text-[10px] text-zinc-400 font-mono truncate">@{chat.otherUsername}</span>
+                        )}
+                        {chat.otherUserTitle && (
+                          <span className="text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1 py-0.5 rounded-full font-bold shrink-0">
+                            {chat.otherUserTitle}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-zinc-500 font-mono shrink-0 ml-1">
                         {chat.lastMessageAt ? new Date(chat.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
@@ -372,7 +476,7 @@ function MessagesInner() {
                         <span className="truncate">{chat.lastMessageContent || "Chat iniciado"}</span>
                       </p>
                       {chat.unreadCount > 0 && (
-                        <span className="bg-emerald-500 text-black text-[10px] font-black px-1.5 py-0.2 rounded-full shrink-0">
+                        <span className="bg-emerald-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded-full shrink-0">
                           {chat.unreadCount}
                         </span>
                       )}
@@ -402,22 +506,50 @@ function MessagesInner() {
                 <button className="sm:hidden text-white p-1 -ml-1 rounded-lg" onClick={() => setActiveChatId(null)}>
                   <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="relative w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-black text-xs text-white overflow-hidden">
-                  {activeChat.displayAvatarUrl ? (
-                    <Image src={getImageUrl(activeChat.displayAvatarUrl)} alt={activeChat.displayName} fill sizes="40px" className="object-cover" />
-                  ) : (
-                    getInitials(activeChat.displayName)
+                <div className="relative shrink-0">
+                  <div className={`relative w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-black text-xs text-white overflow-hidden ${getFrameClass(activeChat.otherUserFrame)}`}>
+                    {activeChat.displayAvatarUrl ? (
+                      <Image src={getImageUrl(activeChat.displayAvatarUrl)} alt={activeChat.displayName} fill sizes="40px" className="object-cover" />
+                    ) : (
+                      getInitials(activeChat.displayName)
+                    )}
+                  </div>
+                  {activeChat.otherUserPet && (
+                    <span className="absolute -bottom-1 -left-1 text-xs select-none" title={`Mascota: ${activeChat.otherUserPet}`}>
+                      {activeChat.otherUserPet}
+                    </span>
                   )}
                   {activeChat.isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#161626] rounded-full" />}
                 </div>
-                <div>
-                  <h3 className="font-black text-xs sm:text-sm text-white leading-tight">{activeChat.displayName}</h3>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link
+                      href={activeChat.otherUsername ? `/profile/${encodeURIComponent(activeChat.otherUsername)}` : '#'}
+                      className="font-black text-xs sm:text-sm text-white hover:text-purple-400 transition-colors leading-tight truncate"
+                    >
+                      {activeChat.displayName}
+                    </Link>
+                    {activeChat.otherUsername && (
+                      <Link
+                        href={`/profile/${encodeURIComponent(activeChat.otherUsername)}`}
+                        className="text-[11px] text-zinc-400 font-mono hover:underline truncate"
+                      >
+                        @{activeChat.otherUsername}
+                      </Link>
+                    )}
+                    {activeChat.otherUserTitle && (
+                      <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold">
+                        {activeChat.otherUserTitle}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
                     {activeChat.isOnline ? (
                       <span className="text-emerald-400 font-bold flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> En línea
                       </span>
-                    ) : <span>Sin conexión</span>}
+                    ) : activeChat.isGroup ? <span>Chat de grupo</span>
+                      : <span>{activeChat.otherUserLastSeen ? `Visto ${timeAgo(activeChat.otherUserLastSeen)}` : 'Sin conexión'}</span>}
                   </p>
                 </div>
               </div>
@@ -446,6 +578,7 @@ function MessagesInner() {
                 activeChat.messages.map((msg) => {
                   const isMine = msg.senderId === currentUserId;
                   const displayTime = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  const sender = activeChat.isGroup && !isMine ? senderInfo(msg.senderId) : null;
                   return (
                     <div key={msg.id} className={`flex flex-col max-w-[85%] sm:max-w-[65%] group relative ${isMine ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
                       {isMine && (
@@ -460,6 +593,7 @@ function MessagesInner() {
                       <div className={`p-3 text-xs sm:text-sm leading-relaxed shadow-lg relative ${
                         isMine ? 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white rounded-2xl rounded-tr-xs' : 'bg-[#1a1a2b] border border-zinc-800 text-zinc-100 rounded-2xl rounded-tl-xs'
                       }`}>
+                        {sender && <span className="block text-[10px] font-black text-purple-300 mb-0.5">@{sender.name}</span>}
                         <span className="whitespace-pre-wrap break-words">{msg.content}</span>
                         <div className={`flex items-center gap-1.5 mt-1 text-[10px] ${isMine ? 'text-purple-200 justify-end' : 'text-zinc-400 justify-start'}`}>
                           <span className="font-mono">{displayTime}</span>

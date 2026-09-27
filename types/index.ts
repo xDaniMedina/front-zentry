@@ -114,7 +114,9 @@ export interface Follower {
 export interface Notification {
   id: string | number
   user_id?: string
-  type: 'like' | 'comment' | 'follow' | 'friend_request' | 'friend_accept' | 'reward' | 'system'
+  type: 'like' | 'comment' | 'comment_like' | 'follow' | 'friend_request' | 'friend_accept'
+    | 'story_reaction' | 'story_reply' | 'message' | 'achievement' | 'mission' | 'streak'
+    | 'project_invite' | 'project_message' | 'community' | 'reward' | 'system'
   content?: string
   text?: string
   read: boolean
@@ -145,11 +147,20 @@ export interface Conversation {
   isGroup: boolean
   name: string | null
   otherUserId: number | null
+  otherUsername?: string | null
+  otherName?: string | null
+  otherAvatarUrl?: string | null
+  otherUserFrame?: string | null
+  otherUserPet?: string | null
+  otherUserTitle?: string | null
+  /** Presencia real calculada por el backend (no solo para amigos) */
+  otherUserOnline?: boolean | null
+  otherUserLastSeen?: string | null
   lastMessageContent: string | null
   lastMessageSenderId: number | null
   lastMessageAt: string | null
   unreadCount: number
-  // Resueltos en el cliente a partir de la lista de amigos/perfil (no vienen del backend)
+  // Resueltos en el cliente a partir de la lista de amigos/perfil o backend
   displayName: string
   displayAvatarUrl?: string | null
   isOnline?: boolean
@@ -269,16 +280,59 @@ export interface StudioProject {
 }
 
 export type ProjectPriority = 'baja' | 'media' | 'alta' | 'urgente';
-export type ProjectCategory = 'UI/UX' | 'Arte Digital' | 'Desarrollo' | 'Animación 3D' | 'Branding' | 'Música' | 'General';
+export type ProjectCategory = 'UI/UX' | 'Arte Digital' | 'Desarrollo' | 'Animación 3D' | 'Branding' | 'Música' | 'Literatura' | 'Video' | 'General';
 export type ProjectStatus = 'active' | 'completed' | 'paused';
 
 export interface ProjectMember {
   id: string;
   name: string;
+  /** clave interna (email) — usar handle para mostrar */
   username?: string;
+  handle?: string;
+  userId?: number;
   avatar: string;
+  avatarUrl?: string | null;
+  cosmetics?: import('@/lib/shop').UserCosmetics | null;
   role: string;
+  isOwner?: boolean;
   isOnline: boolean;
+}
+
+export type ProjectType = 'general' | 'book' | 'image' | 'video' | 'audio';
+
+/** Archivo o carpeta del drive del proyecto */
+export interface DriveItem {
+  id: string;
+  name: string;
+  type: string;
+  size: string;
+  url?: string | null;
+  uploadedBy?: string;
+  date?: string;
+  folder: string;
+  mimeType?: string | null;
+  isFolder: boolean;
+}
+
+export interface ProjectChapter {
+  id: string;
+  title: string;
+  content: string;
+  position: number;
+  wordCount: number;
+  authorUsername?: string | null;
+  lastEditedBy?: string | null;
+  updatedAt?: string;
+}
+
+export interface ProjectActivityItem {
+  id: string;
+  user: string;
+  avatar?: string;
+  action: string;
+  target?: string;
+  time?: string;
+  iconType?: string;
 }
 
 export interface ProjectTask {
@@ -328,6 +382,17 @@ export interface Project {
   visibility?: 'public' | 'private';
   types?: string[];
   date?: string;
+  projectType?: ProjectType;
+  coverUrl?: string | null;
+  conversationId?: number | null;
+  studioProjectId?: number | null;
+  publishedPostId?: number | null;
+  isOwner?: boolean;
+  isMember?: boolean;
+  membersCount?: number;
+  chaptersCount?: number;
+  resources?: DriveItem[];
+  activities?: ProjectActivityItem[];
 }
 
 export interface User {
@@ -338,6 +403,8 @@ export interface User {
   avatar_url?: string
   banner_url?: string
   discipline?: string
+  specialties?: string
+  onboardingCompleted?: boolean
   bio?: string
   location?: string
   followersCount?: number

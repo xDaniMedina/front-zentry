@@ -1,18 +1,22 @@
 "use client"
 
+import UserAvatar from "@/components/shared/UserAvatar"
+import { useMyAvatar } from "@/lib/hooks/useMyAvatar"
 import { useState, useRef } from "react";
 import { Shield, Bell, Info, ArrowLeft, Globe, ShieldCheck,
   Send, Image as ImageIcon, Link as LinkIcon, Flame,
   CheckCircle2, Sparkles, Settings, Plus, Trash2, X, Edit3,
-  MessageSquare, MessagesSquare, Loader2
+  MessageSquare, MessagesSquare, Loader2, Lock, Users
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import CommunityMembersModal from "@/components/communities/CommunityMembersModal";
 import Link from "next/link";
 import { toast } from "sonner";
 import { FeedCard, PostType } from "@/components/feed/FeedCard";
 import { useAuth } from "@/context/AuthContext";
 import { timeAgo } from "@/lib/utils";
 import {
-  joinCommunityAction, leaveCommunityAction, updateCommunityConfigAction,
+  joinCommunityAction, leaveCommunityAction, updateCommunityConfigAction, deleteCommunityAction,
   createCommunityPostAction, toggleCommunityNotificationsAction,
   getCommunityForumThreadsAction, createForumThreadAction,
   getForumThreadRepliesAction, createForumReplyAction,
@@ -27,6 +31,8 @@ function toPostType(p: CommunityPostDTO): PostType {
     author: p.author,
     handle: p.handle,
     avatar: p.avatar,
+    avatar_url: p.avatarUrl,
+    authorCosmetics: p.authorCosmetics,
     media_url: p.media_url,
     likes: p.likes,
     comments: p.comments,
@@ -38,11 +44,19 @@ function toPostType(p: CommunityPostDTO): PostType {
 
 export default function CommunityDetailClient({ slug, initialData, initialPosts }: { slug: string; initialData?: CommunityDTO | null; initialPosts?: CommunityPostDTO[] }) {
   const { user } = useAuth();
+  const router = useRouter();
+  const myAvatar = useMyAvatar();
 
   const communityId = initialData?.id || '';
   const ownerUsername = initialData?.ownerUsername || 'admin';
 
-  const [communityName] = useState<string>(initialData?.name || slug);
+  const [communityName, setCommunityName] = useState<string>(initialData?.name || slug);
+  const [privacy, setPrivacy] = useState<'public' | 'private'>(initialData?.privacy || 'public');
+  const [hasPendingRequest, setHasPendingRequest] = useState<boolean>(initialData?.hasPendingRequest ?? false);
+  const [pendingCount, setPendingCount] = useState<number>(initialData?.pendingCount ?? 0);
+  const [isMembersOpen, setIsMembersOpen] = useState(false);
+  const [editName, setEditName] = useState<string>(initialData?.name || slug);
+  const [editPrivacy, setEditPrivacy] = useState<'public' | 'private'>(initialData?.privacy || 'public');
   const [description, setDescription] = useState<string>(initialData?.description || '');
   const [rules, setRules] = useState<string[]>(initialData?.rules || []);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(initialData?.avatarUrl || null);
@@ -75,7 +89,10 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   const [feedSort, setFeedSort] = useState<'hot' | 'new'>('hot');
-  const isAdmin = user && user.username ? (user.username.toLowerCase() === ownerUsername.toLowerCase()) : false;
+  // Permisos calculados por el backend (creador o miembros con rol ADMIN)
+  const isAdmin = Boolean(initialData?.isAdmin);
+  const isOwner = Boolean(initialData?.isOwner);
+  const canSeeContent = privacy === 'public' || isJoined;
 
   // Foro de la Comunidad
   const [mainTab, setMainTab] = useState<'posts' | 'forum'>('posts');
@@ -172,6 +189,15 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
 
   const handleToggleJoin = async () => {
     if (!communityId) return;
+    // Grupo privado: pedir ingreso (o cancelar la solicitud)
+    if (privacy === 'private' && !isJoined) {
+      const res = await (hasPendingRequest ? leaveCommunityAction(communityId) : joinCommunityAction(communityId));
+      if (!res.success || !res.data) { toast.error(res.error || "No se pudo enviar la solicitud"); return; }
+      setHasPendingRequest(res.data.hasPendingRequest);
+      toast.success(res.data.hasPendingRequest ? "Solicitud enviada. Un administrador debe aprobarla." : "Solicitud cancelada");
+      return;
+    }
+    if (isJoined && isAdmin && !window.confirm("Eres administrador. ¿Seguro que quieres salir del grupo?")) return;
     const previous = isJoined;
     const nextState = !isJoined;
     setIsJoined(nextState);
@@ -235,6 +261,14 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
     setEditRules(editRules.filter((_, i) => i !== index));
   };
 
+  const handleDeleteCommunity = async () => {
+    if (!communityId || !window.confirm(`¿Eliminar c/${slug} para siempre? Esta acción no se puede deshacer.`)) return;
+    const res = await deleteCommunityAction(communityId);
+    if (!res.success) { toast.error(res.error); return; }
+    toast.success("Grupo eliminado");
+    router.push("/communities");
+  };
+
   const handleSaveAdminConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!communityId) return;
@@ -242,13 +276,15 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
 
     const res = await updateCommunityConfigAction(
       communityId,
-      { description: editDesc, rules: editRules },
+      { name: editName.trim() || communityName, description: editDesc, rules: editRules, privacy: editPrivacy },
       { avatar: newAvatarFile, banner: newBannerFile }
     );
 
     if (res.success && res.data) {
       setDescription(res.data.description);
       setRules(res.data.rules);
+      setCommunityName(res.data.name);
+      setPrivacy(res.data.privacy);
       if (res.data.avatarUrl) setAvatarPreview(res.data.avatarUrl);
       if (res.data.bannerUrl) setBannerPreview(res.data.bannerUrl);
       toast.success("Configuración de la comunidad guardada correctamente");
@@ -329,7 +365,11 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
               </div>
 
               <div className="flex items-center gap-4 text-xs font-medium text-zentry-text-2 mt-2">
-                <span className="flex items-center gap-1.5"><Globe className="w-4 h-4 text-zentry-text-1" /> {membersCount.toLocaleString()} Miembros</span>
+                <span className="flex items-center gap-1.5">{privacy === 'private' ? <Lock className="w-4 h-4 text-amber-400" /> : <Globe className="w-4 h-4 text-zentry-text-1" />} Grupo {privacy === 'private' ? 'privado' : 'público'}</span>
+                <button onClick={() => setIsMembersOpen(true)} className="flex items-center gap-1.5 hover:text-zentry-text-1 cursor-pointer">
+                  <Users className="w-4 h-4" /> {membersCount.toLocaleString()} Miembros
+                  {isAdmin && pendingCount > 0 && <span className="ml-1 px-1.5 rounded-full bg-amber-500 text-black text-[10px] font-black">{pendingCount}</span>}
+                </button>
               </div>
             </div>
             
@@ -355,7 +395,7 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
                     : 'bg-zentry-text-1 text-zentry-bg hover:opacity-90'
                 }`}
               >
-                {isJoined ? 'Unido' : '+ Unirse al grupo'}
+                {isJoined ? 'Unido' : privacy === 'private' ? (hasPendingRequest ? 'Solicitud enviada' : '🔒 Solicitar unirse') : '+ Unirse al grupo'}
               </button>
             </div>
           </div>
@@ -388,13 +428,21 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
             </button>
           </div>
 
-          {mainTab === 'posts' && (
+          {!canSeeContent && (
+            <div className="bg-zentry-card border border-dashed border-zentry-border rounded-3xl p-10 text-center space-y-2">
+              <Lock className="w-10 h-10 mx-auto text-amber-400" />
+              <p className="text-sm font-extrabold text-zentry-text-1">Este grupo es privado</p>
+              <p className="text-xs text-zentry-text-2">Solo sus miembros pueden ver las publicaciones y el foro. {hasPendingRequest ? 'Tu solicitud está pendiente de aprobación.' : 'Solicita unirte para participar.'}</p>
+            </div>
+          )}
+
+          {canSeeContent && mainTab === 'posts' && (
           <>
           {/* Caja para Crear Publicación en la Comunidad Estilo Reddit/FB */}
           <form onSubmit={handleCreatePost} className="bg-zentry-card border border-zentry-border rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-zentry-bg border border-zentry-border flex items-center justify-center font-bold text-zentry-text-1 shrink-0">
-                {(user?.username || "DA").substring(0, 2).toUpperCase()}
+                <UserAvatar name={user?.username || "Yo"} avatarUrl={myAvatar} size={40} shape="rounded" showPet={false} />
               </div>
               <input 
                 type="text" 
@@ -508,7 +556,7 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
           </>
           )}
 
-          {mainTab === 'forum' && (
+          {canSeeContent && mainTab === 'forum' && (
           <div className="space-y-4">
             {/* Botón para abrir un nuevo hilo */}
             {!showNewThreadForm ? (
@@ -517,7 +565,7 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
                 className="w-full bg-zentry-card border border-zentry-border rounded-3xl p-4 flex items-center gap-3 text-left hover:border-zentry-accent/50 transition-colors"
               >
                 <div className="w-10 h-10 rounded-2xl bg-zentry-bg border border-zentry-border flex items-center justify-center font-bold text-zentry-text-1 shrink-0">
-                  {(user?.username || "DA").substring(0, 2).toUpperCase()}
+                  <UserAvatar name={user?.username || "Yo"} avatarUrl={myAvatar} size={40} shape="rounded" showPet={false} />
                 </div>
                 <span className="text-sm text-zentry-text-2">Abrir un nuevo hilo de discusión en c/{slug}...</span>
                 <Plus className="w-4 h-4 text-zentry-accent ml-auto shrink-0" />
@@ -623,9 +671,11 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
               </div>
               <div className="flex justify-between items-center py-1">
                 <span>Estado:</span>
-                <span className="font-bold text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Público
-                </span>
+                {privacy === 'private' ? (
+                  <span className="font-bold text-amber-400 flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Privado</span>
+                ) : (
+                  <span className="font-bold text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Público</span>
+                )}
               </div>
               <div className="flex justify-between items-center py-1">
                 <span>Administrador:</span>
@@ -674,6 +724,10 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
                 <p className="text-[10px] text-zentry-text-2">Creador / Administrador</p>
               </div>
             </div>
+            <button onClick={() => setIsMembersOpen(true)}
+              className="w-full py-2 rounded-xl bg-zentry-bg border border-zentry-border text-xs font-bold text-zentry-text-1 hover:border-zentry-accent flex items-center justify-center gap-1.5 cursor-pointer">
+              <Users className="w-3.5 h-3.5" /> Ver miembros{isAdmin && pendingCount > 0 ? ` · ${pendingCount} solicitudes` : ''}
+            </button>
           </div>
 
         </div>
@@ -750,6 +804,15 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
         </div>
       )}
 
+      {isMembersOpen && (
+        <CommunityMembersModal
+          identifier={communityId || slug}
+          isAdmin={isAdmin}
+          onClose={() => setIsMembersOpen(false)}
+          onCommunityChange={(c) => { setMembersCount(c.members); setPendingCount(c.pendingCount); }}
+        />
+      )}
+
       {/* MODAL CONFIGURACIÓN DE COMUNIDAD (ADMIN) */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -789,6 +852,22 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Nombre y privacidad */}
+              <div>
+                <label className="block text-xs font-bold text-zentry-text-2 mb-1.5 uppercase tracking-wider">Nombre del grupo</label>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={80}
+                  className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-2.5 text-xs text-zentry-text-1 focus:outline-none focus:border-zentry-accent" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['public', 'private'] as const).map(v => (
+                  <button type="button" key={v} onClick={() => setEditPrivacy(v)}
+                    className={`p-3 rounded-xl border text-left text-xs cursor-pointer ${editPrivacy === v ? 'border-zentry-accent bg-zentry-accent/10' : 'border-zentry-border bg-zentry-bg'}`}>
+                    <span className="font-extrabold text-zentry-text-1 flex items-center gap-1.5">{v === 'public' ? <Globe className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />} {v === 'public' ? 'Público' : 'Privado'}</span>
+                    <span className="text-[10px] text-zentry-text-2">{v === 'public' ? 'Cualquiera ve y se une' : 'Solicitud de ingreso; contenido solo para miembros'}</span>
+                  </button>
+                ))}
               </div>
 
               {/* Acerca de / Descripción */}
@@ -840,8 +919,15 @@ export default function CommunityDetailClient({ slug, initialData, initialPosts 
                 </div>
               </div>
 
+              {isOwner && (
+                <button type="button" onClick={handleDeleteCommunity}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 flex items-center justify-center gap-1.5 cursor-pointer">
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar grupo
+                </button>
+              )}
+
               <div className="pt-3 border-t border-zentry-border flex gap-3">
-                <button 
+                <button
                   type="button"
                   onClick={() => setIsAdminModalOpen(false)}
                   disabled={isSavingConfig}

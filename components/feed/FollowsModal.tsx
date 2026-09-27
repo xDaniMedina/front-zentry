@@ -51,7 +51,7 @@ export default function FollowsModal({ isOpen, onClose, username, type }: Follow
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm sm:max-w-md h-[80vh] sm:h-[600px] bg-zentry-bg border border-zentry-border sm:rounded-3xl z-[101] flex flex-col overflow-hidden shadow-2xl"
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm sm:max-w-md h-[80dvh] sm:h-[min(600px,85dvh)] bg-zentry-bg border border-zentry-border sm:rounded-3xl z-[101] flex flex-col overflow-hidden shadow-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-zentry-border shrink-0">

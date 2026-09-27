@@ -5,5 +5,5 @@ export const dynamic = 'force-dynamic';
 
 export default async function FeedPage() {
   const res = await getFeedPosts();
-  return <FeedClient initialPosts={res.success ? res.data : []} />;
+  return <FeedClient initialPosts={res.success ? res.data : []} initialHasMore={Boolean(res.hasMore)} />;
 }

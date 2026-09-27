@@ -12,6 +12,7 @@ export async function updateProfileAction(formData: FormData) {
         discipline: formData.get('discipline'),
         location: formData.get('location'),
         bio: formData.get('bio'),
+        specialties: formData.get('specialties'),
       }),
     })
 
@@ -90,5 +91,43 @@ export async function searchProfilesAction(query: string) {
   } catch (error) {
     console.error('Error al buscar perfiles:', error)
     return { success: false, data: [] }
+  }
+}
+
+// Se ejecuta en el servidor: la cookie zentry_token es HTTP-Only y el navegador no puede leerla
+export async function saveOnboardingProfileAction(payload: {
+  name: string
+  artisticName: string
+  username: string
+  birthDate: string
+  discipline: string
+  specialties: string
+  bio: string
+  experienceLevel: string
+}) {
+  try {
+    const res = await fetchAPI('/api/core/profiles/me', {
+      method: 'PUT',
+      body: JSON.stringify({ ...payload, onboardingCompleted: true }),
+    })
+    if (!res) {
+      return { success: false as const, message: 'Tu sesión expiró. Inicia sesión de nuevo.' }
+    }
+    revalidatePath('/', 'layout')
+    return { success: true as const, data: res }
+  } catch (error) {
+    console.error('Error guardando onboarding:', error)
+    const message = error instanceof Error ? error.message : 'Error de conexión'
+    return { success: false as const, message }
+  }
+}
+
+export async function getProfileByUsernameAction(username: string) {
+  try {
+    const res = await fetchAPI(`/api/core/profiles/${encodeURIComponent(username.replace(/^@/, ''))}`)
+    if (!res) return { success: false as const }
+    return { success: true as const, data: res }
+  } catch {
+    return { success: false as const }
   }
 }

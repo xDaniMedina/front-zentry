@@ -1,5 +1,6 @@
 'use server'
 
+import { getImageUrl } from '@/lib/utils'
 import { fetchAPI, ApiError } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
 
@@ -20,6 +21,12 @@ type BackendCommunity = {
   membersCount: number
   isJoined: boolean
   createdAt: string
+  privacy?: string | null
+  myRole?: string | null
+  isAdmin?: boolean
+  isOwner?: boolean
+  hasPendingRequest?: boolean
+  pendingCount?: number | null
 }
 
 export type CommunityDTO = {
@@ -35,6 +42,11 @@ export type CommunityDTO = {
   avatarUrl?: string
   bannerUrl?: string
   rules: string[]
+  privacy: 'public' | 'private'
+  isAdmin: boolean
+  isOwner: boolean
+  hasPendingRequest: boolean
+  pendingCount: number
 }
 
 function toCommunityDTO(c: BackendCommunity): CommunityDTO {
@@ -51,6 +63,11 @@ function toCommunityDTO(c: BackendCommunity): CommunityDTO {
     avatarUrl: c.avatarUrl || c.imageUrl || undefined,
     bannerUrl: c.bannerUrl || undefined,
     rules: c.rules || [],
+    privacy: c.privacy === 'private' ? 'private' : 'public',
+    isAdmin: Boolean(c.isAdmin),
+    isOwner: Boolean(c.isOwner),
+    hasPendingRequest: Boolean(c.hasPendingRequest),
+    pendingCount: c.pendingCount ?? 0,
   }
 }
 
@@ -107,13 +124,19 @@ export async function leaveCommunityAction(identifier: string): Promise<{ succes
   }
 }
 
-type CommunityPayload = { name: string; description: string; slug?: string; category?: string }
+type CommunityPayload = { name: string; description: string; slug?: string; category?: string; privacy?: 'public' | 'private' }
 
 export async function createCommunityAction(payload: CommunityPayload): Promise<{ success: boolean; data?: CommunityDTO; error?: string }> {
   try {
     const res: BackendCommunity | null = await fetchAPI('/api/core/communities', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        nombre: payload.name,
+        descripcion: payload.description,
+        slug: payload.slug,
+        categoria: payload.category,
+        privacy: payload.privacy,
+      }),
     })
     if (!res) {
       return { success: false, error: 'No se pudo crear la comunidad' }
@@ -129,7 +152,8 @@ export async function createCommunityAction(payload: CommunityPayload): Promise<
 
 export async function deleteCommunityAction(communityId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    await fetchAPI(`/api/core/communities/${communityId}`, { method: 'DELETE' })
+    const res = await fetchAPI(`/api/core/communities/${communityId}`, { method: 'DELETE' })
+    if (!res) return { success: false, error: 'Solo el creador puede eliminar la comunidad' }
     revalidatePath('/communities')
     return { success: true }
   } catch (error) {
@@ -143,12 +167,20 @@ export async function deleteCommunityAction(communityId: string): Promise<{ succ
 // que espera un part llamado "data" con el JSON de CommunityRequest — nunca campos sueltos.
 export async function updateCommunityConfigAction(
   identifier: string,
-  payload: { name?: string; description?: string; category?: string; rules?: string[] },
+  payload: { name?: string; description?: string; category?: string; rules?: string[]; privacy?: 'public' | 'private' },
   files?: { avatar?: File | null; banner?: File | null }
 ): Promise<{ success: boolean; data?: CommunityDTO; error?: string }> {
   try {
     const formData = new FormData()
-    formData.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }))
+    // El backend usa los nombres en español de CommunityRequest
+    const body = {
+      nombre: payload.name,
+      descripcion: payload.description,
+      categoria: payload.category,
+      rules: payload.rules,
+      privacy: payload.privacy,
+    }
+    formData.append('data', new Blob([JSON.stringify(body)], { type: 'application/json' }))
     if (files?.avatar) formData.append('avatar', files.avatar)
     if (files?.banner) formData.append('banner', files.banner)
 
@@ -172,6 +204,8 @@ type BackendPost = {
   id: number
   authorUsername: string | null
   authorName: string | null
+  authorAvatar?: string | null
+  authorCosmetics?: import('@/lib/shop').UserCosmetics | null
   title: string
   contenido: string | null
   imageUrl: string | null
@@ -185,6 +219,8 @@ export type CommunityPostDTO = {
   author: string
   handle: string
   avatar: string
+  avatarUrl?: string
+  authorCosmetics?: import('@/lib/shop').UserCosmetics | null
   title: string
   description?: string
   media_url?: string
@@ -200,6 +236,8 @@ function toCommunityPost(p: BackendPost): CommunityPostDTO {
     author,
     handle: `@${p.authorUsername || author}`,
     avatar: author.substring(0, 2).toUpperCase(),
+    avatarUrl: p.authorAvatar ? getImageUrl(p.authorAvatar) : undefined,
+    authorCosmetics: p.authorCosmetics ?? null,
     title: p.title,
     description: p.contenido || undefined,
     media_url: p.imageUrl || undefined,
@@ -386,5 +424,39 @@ export async function createForumReplyAction(
     const message = error instanceof ApiError ? error.message : 'No se pudo publicar tu respuesta'
     console.error('Error al responder en el hilo:', error)
     return { success: false, error: message }
+  }
+}
+
+export type CommunityMemberDTO = {
+  userId: number
+  username: string
+  name: string
+  avatarUrl?: string | null
+  role: 'ADMIN' | 'MODERATOR' | 'MEMBER' | 'PENDING'
+  isOwner: boolean
+  joinedAt?: string
+  cosmetics?: import('@/lib/shop').UserCosmetics | null
+}
+
+export async function getCommunityMembersAction(identifier: string): Promise<{ success: boolean; data: CommunityMemberDTO[] }> {
+  try {
+    const res = await fetchAPI(`/api/core/communities/${identifier}/members`)
+    return { success: Array.isArray(res), data: Array.isArray(res) ? res : [] }
+  } catch {
+    return { success: false, data: [] }
+  }
+}
+
+export async function manageCommunityMemberAction(
+  identifier: string,
+  userId: number,
+  action: 'approve' | 'reject' | 'promote' | 'demote' | 'remove'
+): Promise<{ success: boolean; data?: CommunityDTO; error?: string }> {
+  try {
+    const res: BackendCommunity | null = await fetchAPI(`/api/core/communities/${identifier}/members/${userId}/${action}`, { method: 'POST' })
+    if (!res) return { success: false, error: 'Solo los administradores pueden gestionar miembros' }
+    return { success: true, data: toCommunityDTO(res) }
+  } catch (error) {
+    return { success: false, error: error instanceof ApiError ? error.message : 'No se pudo aplicar la acción' }
   }
 }

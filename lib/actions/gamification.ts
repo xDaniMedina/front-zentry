@@ -95,3 +95,27 @@ export async function claimMission(missionId: number): Promise<{ success: boolea
     return { success: false, error: message }
   }
 }
+
+export type UserStreakData = {
+  userId: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastActivityDate: string | null;
+  activeToday: boolean;
+  /** active | at_risk | lost | none */
+  state?: 'active' | 'at_risk' | 'lost' | 'none';
+  hoursLeftToday?: number;
+};
+
+export async function getStreakAction(): Promise<{ success: boolean; data?: UserStreakData }> {
+  try {
+    const res: UserStreakData | null = await fetchAPI('/api/core/streaks/me')
+    if (!res) {
+      return { success: false }
+    }
+    return { success: true, data: res }
+  } catch (error) {
+    console.error('Error fetching streak:', error)
+    return { success: false }
+  }
+}

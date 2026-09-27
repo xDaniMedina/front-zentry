@@ -1,8 +1,10 @@
 "use client"
 
+import Image from "next/image";
+import { getImageUrl } from "@/lib/utils";
 import { useState } from "react";
 import Link from "next/link";
-import { Users, Globe, Plus, X, Edit3, Trash2, Loader2, UserCheck, Search, Flame, Sparkles } from "lucide-react";
+import { Users, Globe, Plus, X, Edit3, Trash2, Loader2, UserCheck, Search, Flame, Sparkles , Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { createCommunityAction, updateCommunityConfigAction, deleteCommunityAction, joinCommunityAction, leaveCommunityAction } from "@/lib/actions/communities";
@@ -20,6 +22,11 @@ export type CommunitySummary = {
   category?: string;
   postsPerDay?: number;
   bannerGradient?: string;
+  privacy?: 'public' | 'private';
+  isOwner?: boolean;
+  hasPendingRequest?: boolean;
+  avatarUrl?: string;
+  bannerUrl?: string;
 }
 
 export default function CommunitiesClient({ initialData }: { initialData: CommunitySummary[] | null }) {
@@ -35,6 +42,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
   const [commName, setCommName] = useState("");
   const [commDesc, setCommDesc] = useState("");
   const [commCategory, setCommCategory] = useState("Arte Digital");
+  const [commPrivacy, setCommPrivacy] = useState<'public' | 'private'>('public');
   const [isLoading, setIsLoading] = useState(false);
 
   const categories = ["Todas", "Arte Digital", "Diseño", "Programación", "Música", "Escritura"];
@@ -64,6 +72,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
     setCommName(community.name);
     setCommDesc(community.description);
     setCommCategory(community.category || "Arte Digital");
+    setCommPrivacy(community.privacy || 'public');
     setIsModalOpen(true);
   };
 
@@ -78,7 +87,8 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
       name: commName,
       description: commDesc,
       slug: slug,
-      category: commCategory
+      category: commCategory,
+      privacy: commPrivacy,
     };
 
     try {
@@ -87,6 +97,7 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
           name: commName,
           description: commDesc,
           category: commCategory,
+          privacy: commPrivacy,
         });
 
         if (res.success && res.data) {
@@ -132,6 +143,15 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
   };
 
   const handleToggleJoin = async (community: CommunitySummary) => {
+    // Grupo privado: enviar o cancelar solicitud de ingreso
+    if (community.privacy === 'private' && !community.isJoined) {
+      const res = await (community.hasPendingRequest ? leaveCommunityAction(community.id) : joinCommunityAction(community.id));
+      if (!res.success || !res.data) { toast.error(res.error || "No se pudo enviar la solicitud"); return; }
+      const fresh = res.data;
+      setCommunities(prev => prev.map(c => c.id === community.id ? { ...c, ...fresh } : c));
+      toast.success(fresh.hasPendingRequest ? "Solicitud enviada al administrador" : "Solicitud cancelada");
+      return;
+    }
     const newJoined = !community.isJoined;
 
     setCommunities(prev => prev.map(c => c.id === community.id ? {
@@ -292,13 +312,15 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      <button 
-                        onClick={() => handleDeleteCommunitySummary(community.id)} 
-                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                        title="Eliminar comunidad"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {community.isOwner && (
+                        <button
+                          onClick={() => handleDeleteCommunitySummary(community.id)}
+                          className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                          title="Eliminar comunidad"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -306,8 +328,10 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
                 {/* Avatar e Info Principal */}
                 <div className="px-5 pt-0 relative flex-1 flex flex-col">
                   <div className="flex justify-between items-end -mt-8 mb-3">
-                    <div className="w-14 h-14 rounded-2xl bg-zentry-bg border-4 border-zentry-card flex items-center justify-center shadow-md font-extrabold text-zentry-accent text-xl">
-                      {community.name.substring(0, 2).toUpperCase()}
+                    <div className="relative w-14 h-14 rounded-2xl bg-zentry-bg border-4 border-zentry-card flex items-center justify-center shadow-md font-extrabold text-zentry-accent text-xl overflow-hidden">
+                      {community.avatarUrl ? (
+                        <Image src={getImageUrl(community.avatarUrl)} alt={community.name} fill sizes="56px" className="object-cover" />
+                      ) : community.name.substring(0, 2).toUpperCase()}
                     </div>
 
                     <button 
@@ -318,13 +342,16 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
                           : 'bg-zentry-text-1 text-zentry-bg hover:opacity-90 shadow-sm'
                       }`}
                     >
-                      {community.isJoined ? <><UserCheck className="w-3.5 h-3.5" /> Unido</> : '+ Unirse'}
+                      {community.isJoined ? <><UserCheck className="w-3.5 h-3.5" /> Unido</>
+                        : community.privacy === 'private' ? (community.hasPendingRequest ? 'Solicitado' : '🔒 Solicitar')
+                        : '+ Unirse'}
                     </button>
                   </div>
 
                   <Link href={`/communities/${community.slug}`} className="group-hover:underline">
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-zentry-text-1 text-base leading-snug">{community.name}</h3>
+                      {community.privacy === 'private' && <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-label="Grupo privado" />}
                       {isAdmin && (
                         <span className="text-[10px] bg-zentry-accent/20 text-zentry-accent px-1.5 py-0.5 rounded font-bold shrink-0">
                           Admin
@@ -378,6 +405,16 @@ export default function CommunitiesClient({ initialData }: { initialData: Commun
                   placeholder="Ej. Ilustración Digital & Concept Art"
                   className="w-full bg-zentry-bg border border-zentry-border rounded-xl px-4 py-3 text-sm text-zentry-text-1 focus:outline-none focus:border-zentry-accent transition-colors"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {(['public', 'private'] as const).map(v => (
+                  <button type="button" key={v} onClick={() => setCommPrivacy(v)}
+                    className={`p-3 rounded-xl border text-left text-xs cursor-pointer ${commPrivacy === v ? 'border-zentry-accent bg-zentry-accent/10' : 'border-zentry-border bg-zentry-bg'}`}>
+                    <span className="font-extrabold text-zentry-text-1 flex items-center gap-1.5">{v === 'public' ? '🌐 Público' : '🔒 Privado'}</span>
+                    <span className="text-[10px] text-zentry-text-2">{v === 'public' ? 'Cualquiera ve y se une' : 'Hay que solicitar ingreso'}</span>
+                  </button>
+                ))}
               </div>
 
               <div>

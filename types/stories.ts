@@ -23,6 +23,8 @@ export interface StoryItem {
   created_at: string;
   likes: number;
   liked?: boolean;
+  /** like | fire | clap | wow | laugh | idea */
+  myReaction?: string | null;
 }
 
 export interface UserStoryGroup {

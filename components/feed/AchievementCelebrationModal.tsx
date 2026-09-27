@@ -1,6 +1,7 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles, X, Coins, Award } from 'lucide-react'
 
@@ -21,14 +22,22 @@ export default function AchievementCelebrationModal({
   rewardCoins = 100,
   icon = "🏆"
 }: AchievementCelebrationModalProps) {
-  if (!isOpen) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
-  return (
+  if (!isOpen || !mounted) return null
+
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <div
+        className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Logro desbloqueado: ${achievementName}`}
+      >
         
         {/* Glow de Fondo */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/20 blur-[130px] rounded-full pointer-events-none animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(500px,90vw)] h-[min(500px,90vw)] bg-amber-500/20 blur-[130px] rounded-full pointer-events-none animate-pulse" />
 
         <motion.div
           initial={{ scale: 0.7, opacity: 0, y: 30 }}
@@ -40,6 +49,7 @@ export default function AchievementCelebrationModal({
           {/* Botón Cerrar */}
           <button
             onClick={onClose}
+            aria-label="Cerrar"
             className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
@@ -86,6 +96,7 @@ export default function AchievementCelebrationModal({
               <div className="text-left">
                 <span className="block text-[10px] uppercase font-bold text-amber-400/80">Recompensa</span>
                 <span className="text-lg font-black text-amber-300 font-mono">+{rewardCoins} Zentry Coins</span>
+                <span className="block text-[10px] text-amber-200/70">Ya se añadieron a tu billetera</span>
               </div>
             </div>
           )}
@@ -94,10 +105,11 @@ export default function AchievementCelebrationModal({
             onClick={onClose}
             className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 hover:to-orange-400 text-black font-black py-4 rounded-2xl text-sm transition-all shadow-lg shadow-amber-500/25 active:scale-95"
           >
-            ¡Reclamar y Continuar! 🚀
+            ¡Genial, continuar! 🚀
           </button>
         </motion.div>
       </div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

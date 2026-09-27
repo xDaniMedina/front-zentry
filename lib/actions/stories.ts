@@ -26,6 +26,7 @@ type BackendStory = {
   likes_count: number
   is_viewed: boolean
   is_liked: boolean
+  my_reaction?: string | null
 }
 
 type BackendStoryGroup = {
@@ -56,6 +57,7 @@ function toStoryItem(s: BackendStory): StoryItem {
     created_at: s.created_at,
     likes: s.likes_count || 0,
     liked: Boolean(s.is_liked),
+    myReaction: s.my_reaction ?? (s.is_liked ? 'like' : null),
   }
 }
 
@@ -149,6 +151,20 @@ export async function toggleStoryLikeAction(storyId: string | number): Promise<{
   try {
     const res = await fetchAPI(`/api/core/stories/${storyId}/like`, { method: 'POST' })
     return { success: !!res, liked: res?.is_liked }
+  } catch (error) {
+    console.error('Error al reaccionar a la historia:', error)
+    return { success: false }
+  }
+}
+
+/** Reacción con emoji a una historia (notifica al dueño). Repetir la misma la quita. */
+export async function reactToStoryAction(storyId: string | number, type: string): Promise<{ success: boolean; reaction?: string | null }> {
+  try {
+    const res = await fetchAPI(`/api/core/stories/${storyId}/react`, {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    })
+    return { success: !!res, reaction: res?.reaction ?? null }
   } catch (error) {
     console.error('Error al reaccionar a la historia:', error)
     return { success: false }

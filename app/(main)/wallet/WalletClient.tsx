@@ -421,7 +421,7 @@ export default function WalletClient({ initialData }: { initialData: WalletData 
           </div>
 
           {/* Tarjeta de Saldo Rápido */}
-          <div className="bg-zentry-bg/80 border border-zentry-border/80 backdrop-blur-md rounded-2xl p-5 shrink-0 space-y-3 min-w-[260px] shadow-lg">
+          <div className="bg-zentry-bg/80 border border-zentry-border/80 backdrop-blur-md rounded-2xl p-5 shrink-0 space-y-3 w-full sm:w-auto sm:min-w-[260px] shadow-lg">
             <span className="text-xs font-bold text-zentry-text-2 uppercase tracking-wider block">Saldo Disponible</span>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl sm:text-4xl font-black text-zentry-text-1">{data.balance.toLocaleString()}</span>

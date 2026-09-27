@@ -5,7 +5,8 @@ import { motion } from 'framer-motion'
 import { Sparkles, ArrowRight, ArrowLeft, Check, Calendar, User, Briefcase, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
-import { fetchAPI } from '@/lib/api'
+import { saveOnboardingProfileAction } from '@/lib/actions/profile'
+import { DISCIPLINES, joinSpecialties } from '@/lib/disciplines'
 
 interface OnboardingForm {
   display_name: string
@@ -18,16 +19,6 @@ interface OnboardingForm {
   experience_level: string
 }
 
-const DISCIPLINES = [
-  { value: 'ilastracion', label: 'Ilustración Digital', emoji: '🎨' },
-  { value: '3d_design', label: 'Diseño 3D & VFX', emoji: '🎬' },
-  { value: 'ui_ux', label: 'UI/UX & Product Design', emoji: '📱' },
-  { value: 'animation', label: 'Animación 2D/3D', emoji: '✨' },
-  { value: 'music_audio', label: 'Música & Producción Audio', emoji: '🎵' },
-  { value: 'game_dev', label: 'Desarrollo de Videojuegos', emoji: '🎮' },
-  { value: 'software_dev', label: 'Desarrollo Web & Código', emoji: '💻' },
-  { value: 'photography', label: 'Fotografía & Arte Visual', emoji: '📷' }
-]
 
 const EXPERIENCE_LEVELS = [
   { value: 'principiante', label: 'Explorador / Principiante', desc: 'Empezando en el mundo creativo' },
@@ -46,7 +37,7 @@ export default function OnboardingPage() {
     artistic_name: '',
     username: user?.username ? user.username.replace(/^@/, '') : '',
     birth_date: '',
-    discipline: 'ilastracion',
+    discipline: 'ilustracion',
     specialties: ['Ilustración Digital'],
     bio: '',
     experience_level: 'intermedio'
@@ -90,31 +81,32 @@ export default function OnboardingPage() {
   const handleSubmit = async () => {
     setLoading(true)
     try {
+      // La disciplina principal es la primera especialidad elegida
+      const mainDiscipline = DISCIPLINES.find(d => d.label === form.specialties[0])?.value ?? form.discipline
       const payload = {
         name: form.display_name || form.username,
         artisticName: form.artistic_name,
         username: form.username.toLowerCase().replace(/\s/g, ''),
         birthDate: form.birth_date,
-        discipline: form.discipline,
-        specialties: form.specialties.join(', '),
+        discipline: mainDiscipline,
+        specialties: joinSpecialties(form.specialties),
         bio: form.bio,
         experienceLevel: form.experience_level,
-        onboardingCompleted: true
       }
 
-      await fetchAPI('/api/core/profiles/me', {
-        method: 'PUT',
-        body: JSON.stringify(payload)
-      }).catch(async () => {
-        return fetchAPI('/api/core/profiles', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        })
-      })
+      const res = await saveOnboardingProfileAction(payload)
+      if (!res.success) {
+        toast.error(res.message)
+        return
+      }
 
       updateUser({
         name: payload.name,
         username: payload.username,
+        discipline: payload.discipline,
+        specialties: payload.specialties,
+        bio: payload.bio,
+        avatar_url: res.data?.avatarUrl ?? undefined,
         onboardingCompleted: true
       })
 
@@ -236,10 +228,7 @@ export default function OnboardingPage() {
                   <button
                     key={d.value}
                     type="button"
-                    onClick={() => {
-                      updateForm('discipline', d.value)
-                      toggleSpecialty(d.label)
-                    }}
+                    onClick={() => toggleSpecialty(d.label)}
                     className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
                       isSelected
                         ? 'border-purple-500 bg-purple-500/15 text-white shadow-lg shadow-purple-500/10'

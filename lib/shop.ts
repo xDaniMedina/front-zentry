@@ -32,3 +32,28 @@ export function rarityGradientClass(rarity: ShopRarity): string {
     legendary: 'bg-gradient-to-r from-amber-950 via-orange-900 to-purple-950',
   }[rarity];
 }
+
+/** Cosméticos equipados de un usuario (espejo de CosmeticsResponse del backend) */
+export interface UserCosmetics {
+  frameRarity?: string | null;
+  frameName?: string | null;
+  petIcon?: string | null;
+  petName?: string | null;
+  titleIcon?: string | null;
+  titleName?: string | null;
+}
+
+/** Anillo más fino para avatares pequeños (comentarios, listas) */
+export function rarityRingClassSmall(rarity: ShopRarity): string {
+  return {
+    common: 'ring-2 ring-zinc-500',
+    rare: 'ring-2 ring-blue-400 shadow-md shadow-blue-400/40',
+    epic: 'ring-2 ring-purple-500 shadow-md shadow-purple-600/50',
+    legendary: 'ring-2 ring-amber-400 shadow-lg shadow-amber-400/60 animate-pulse',
+  }[rarity];
+}
+
+export function toShopRarity(value?: string | null): ShopRarity | null {
+  const v = value?.toLowerCase();
+  return v === 'common' || v === 'rare' || v === 'epic' || v === 'legendary' ? v : null;
+}

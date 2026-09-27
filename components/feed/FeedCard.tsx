@@ -1,27 +1,39 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Heart, MessageSquare, Share2, Bookmark, MoreHorizontal, 
-  Play, Pause, Volume2, VolumeX, Music, Maximize2, Copy, Flag, Eye
+  Play, Pause, Volume2, VolumeX, Music, Maximize2, Copy, Flag, Eye, Pencil, Trash2, Loader2, Check
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { getImageUrl, getInitials, timeAgo } from "@/lib/utils"
-import { toggleBookmarkAction } from "@/lib/actions/feed"
+import { timeAgo } from "@/lib/utils"
+import { toggleBookmarkAction, updatePostAction, deletePostAction } from "@/lib/actions/feed"
 import Image from "next/image"
+import ReactionButton, { ReactionSummary } from "@/components/shared/ReactionButton"
+import UserAvatar, { UserTitleBadge } from "@/components/shared/UserAvatar"
+import type { UserCosmetics } from "@/lib/shop"
 
 export type CommentItem = {
   id: string;
   author: string;
   handle: string;
+  avatar?: string;
   text: string;
   time: string;
+  likesCount?: number;
+  liked?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  userId?: number;
+  cosmetics?: UserCosmetics | null;
 };
 
 export type PostType = {
   id: string | number;
+  userId?: number;
   author: string;
   handle: string;
   avatar?: string;
@@ -38,6 +50,11 @@ export type PostType = {
   comments_list?: CommentItem[];
   liked?: boolean;
   saved?: boolean;
+  myReaction?: string | null;
+  reactionCounts?: Record<string, number>;
+  authorCosmetics?: UserCosmetics | null;
+  canEdit?: boolean;
+  canDelete?: boolean;
   height?: string;
   color?: string;
 };
@@ -46,8 +63,12 @@ interface FeedCardProps {
   post: PostType;
   isLiked?: boolean;
   onLike: (postId: string | number) => void;
+  /** Reacción con emoji (selector). Si no se pasa, solo hay me gusta. */
+  onReact?: (postId: string | number, type: string) => void;
   onComment?: (post: PostType) => void;
   onShare?: (post: PostType) => void;
+  onPostUpdated?: (updated: PostType) => void;
+  onPostDeleted?: (postId: string | number) => void;
   isListMode?: boolean;
 }
 
@@ -55,14 +76,65 @@ export function FeedCard({
   post,
   isLiked = false,
   onLike,
+  onReact,
   onComment,
-  onShare, 
+  onShare,
+  onPostUpdated,
+  onPostDeleted,
   isListMode 
 }: FeedCardProps) {
+  const [currentPost, setCurrentPost] = useState<PostType>(post);
+  useEffect(() => {
+    setCurrentPost(post);
+  }, [post]);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(Boolean(post.saved));
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const [isFullscreenImage, setIsFullscreenImage] = useState(false);
+
+  // Estados de Edición y Eliminación
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(post.title || '');
+  const [editDescription, setEditDescription] = useState(post.description || '');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTitle.trim()) {
+      toast.error("El título no puede estar vacío");
+      return;
+    }
+    setIsSavingEdit(true);
+    const res = await updatePostAction(currentPost.id, {
+      title: editTitle.trim(),
+      description: editDescription.trim()
+    });
+    setIsSavingEdit(false);
+    if (res.success && res.data) {
+      setCurrentPost(res.data);
+      setIsEditing(false);
+      toast.success("✨ Publicación actualizada con éxito");
+      onPostUpdated?.(res.data);
+    } else {
+      toast.error(res.error || "No se pudo actualizar la obra");
+    }
+  };
+
+  const handleDeletePost = async () => {
+    setIsDeleting(true);
+    const res = await deletePostAction(currentPost.id);
+    setIsDeleting(false);
+    if (res.success) {
+      setShowDeleteConfirm(false);
+      toast.success("🗑️ Publicación eliminada");
+      onPostDeleted?.(currentPost.id);
+    } else {
+      toast.error(res.error || "No se pudo eliminar la obra");
+    }
+  };
 
   // Estados de Reproducción de Audio
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -74,6 +146,10 @@ export function FeedCard({
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => setPortalReady(true), []);
+  const inPortal = (node: React.ReactNode) => (portalReady ? createPortal(node, document.body) : null);
 
   const rawHandle = post.handle || '@creador';
   const cleanUsername = rawHandle.replace(/^@/, '');
@@ -168,15 +244,11 @@ export function FeedCard({
       {/* 1. Cabecera del Autor (Sin overflow-hidden para que el menú de 3 puntos no se corte) */}
       <div className="p-4 flex items-center justify-between relative bg-zentry-card rounded-t-3xl border-b border-zentry-border/40 z-30">
         <div className="flex items-center gap-3 min-w-0">
-          <Link 
-            href={`/profile/${encodeURIComponent(cleanUsername)}`} 
-            className="relative w-10 h-10 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-center text-xs font-black text-purple-300 hover:border-zentry-accent hover:scale-105 transition-all shrink-0 overflow-hidden shadow-sm"
+          <Link
+            href={`/profile/${encodeURIComponent(cleanUsername)}`}
+            className="shrink-0 hover:scale-105 transition-transform"
           >
-            {post.avatar_url ? (
-              <Image src={getImageUrl(post.avatar_url)} alt={post.author} fill sizes="40px" className="object-cover" />
-            ) : (
-              post.avatar || getInitials(post.author || cleanUsername)
-            )}
+            <UserAvatar name={post.author || cleanUsername} avatarUrl={post.avatar_url} cosmetics={post.authorCosmetics} size={40} />
           </Link>
 
           <div className="min-w-0 flex-1">
@@ -187,6 +259,7 @@ export function FeedCard({
               >
                 {post.author}
               </Link>
+              <UserTitleBadge cosmetics={post.authorCosmetics} className="hidden sm:inline-block" />
               {post.discipline && (
                 <span className="text-[9px] font-bold text-zentry-accent bg-zentry-accent/10 px-2 py-0.5 rounded-full border border-zentry-accent/20 shrink-0 hidden sm:inline-block">
                   {post.discipline}
@@ -263,6 +336,38 @@ export function FeedCard({
                     <Flag className="w-4 h-4" />
                     <span>Reportar publicación</span>
                   </button>
+
+                  {(currentPost.canEdit || currentPost.canDelete) && (
+                    <>
+                      <div className="my-1 border-t border-zinc-800" />
+                      {currentPost.canEdit && (
+                        <button
+                          onClick={() => {
+                            setEditTitle(currentPost.title);
+                            setEditDescription(currentPost.description || '');
+                            setIsEditing(true);
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2.5 text-left hover:bg-purple-950/40 text-purple-300 flex items-center gap-2.5 transition-colors cursor-pointer font-bold"
+                        >
+                          <Pencil className="w-4 h-4 text-purple-400" />
+                          <span>Editar obra</span>
+                        </button>
+                      )}
+                      {currentPost.canDelete && (
+                        <button
+                          onClick={() => {
+                            setShowDeleteConfirm(true);
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2.5 text-left hover:bg-rose-500/20 text-rose-400 flex items-center gap-2.5 transition-colors cursor-pointer font-bold"
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-400" />
+                          <span>Eliminar obra</span>
+                        </button>
+                      )}
+                    </>
+                  )}
                 </motion.div>
               </>
             )}
@@ -277,6 +382,7 @@ export function FeedCard({
         {post.media_type === 'image' && post.media_url && (
           <div 
             className="relative w-full overflow-hidden cursor-pointer select-none group bg-zinc-950 flex items-center justify-center"
+            onClick={() => onComment?.(post)}
             onDoubleClick={handleDoubleClickImage}
           >
             <Image 
@@ -422,14 +528,14 @@ export function FeedCard({
       </div>
 
       {/* 3. Contenido de Texto, Título y Tags */}
-      <div className="p-4 sm:p-5 space-y-3">
+      <div className="p-4 sm:p-5 space-y-3 cursor-pointer" onClick={() => onComment?.(currentPost)}>
         <h3 className="text-sm sm:text-base font-extrabold text-zentry-text-1 leading-snug">
-          {post.title}
+          {currentPost.title}
         </h3>
 
-        {post.description && (
+        {currentPost.description && (
           <p className="text-xs sm:text-sm text-zentry-text-2 leading-relaxed line-clamp-3">
-            {post.description}
+            {currentPost.description}
           </p>
         )}
 
@@ -448,21 +554,27 @@ export function FeedCard({
         )}
       </div>
 
+      {/* Resumen de reacciones y comentarios (estilo Facebook) */}
+      {(post.likes > 0 || post.comments > 0) && (
+        <div className="px-4 pb-2 flex items-center justify-between">
+          <ReactionSummary counts={post.reactionCounts} total={post.likes} myReaction={post.myReaction ?? (isLiked ? 'like' : null)} />
+          {post.comments > 0 && (
+            <button type="button" onClick={() => onComment?.(post)} className="text-[11px] text-zentry-text-2 hover:underline cursor-pointer">
+              {post.comments} {post.comments === 1 ? 'comentario' : 'comentarios'}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 4. Barra de Acciones e Interacciones */}
       <div className="px-4 py-3 border-t border-zentry-border/50 bg-zentry-card rounded-b-3xl flex items-center justify-between">
         <div className="flex items-center gap-1 sm:gap-4">
-          {/* Like */}
-          <button 
-            onClick={() => onLike(post.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-90 ${
-              isLiked 
-                ? 'text-rose-500 bg-rose-500/10' 
-                : 'text-zentry-text-2 hover:text-rose-400 hover:bg-zentry-bg'
-            }`}
-          >
-            <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
-            <span>{post.likes}</span>
-          </button>
+          {/* Reacciones (clic = me gusta, mantener = selector de emojis) */}
+          <ReactionButton
+            myReaction={post.myReaction ?? (isLiked ? 'like' : null)}
+            onToggle={() => onLike(post.id)}
+            onReact={(type) => (onReact ? onReact(post.id, type) : onLike(post.id))}
+          />
 
           {/* Comentarios */}
           <button 
@@ -470,7 +582,7 @@ export function FeedCard({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg transition-colors cursor-pointer"
           >
             <MessageSquare className="w-4 h-4" />
-            <span>{post.comments}</span>
+            <span className="hidden sm:inline">Comentar</span>
           </button>
 
           {/* Compartir */}
@@ -501,7 +613,7 @@ export function FeedCard({
       </div>
 
       {/* Modal de Imagen a Pantalla Completa */}
-      <AnimatePresence>
+      {inPortal(<AnimatePresence>
         {isFullscreenImage && post.media_url && (
           <div 
             className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4"
@@ -527,7 +639,125 @@ export function FeedCard({
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>)}
+
+    
+      {/* MODAL DE EDICIÓN DE PUBLICACIÓN */}
+      {inPortal(<AnimatePresence>
+        {isEditing && (
+          <div 
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-zentry-border pb-3">
+                <div className="flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-purple-400" />
+                  <h4 className="font-extrabold text-sm sm:text-base text-white">Editar Publicación</h4>
+                </div>
+                <button 
+                  onClick={() => setIsEditing(false)}
+                  className="p-1 text-zinc-400 hover:text-white rounded-lg cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300">Título</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    required
+                    className="w-full bg-zentry-bg border border-zentry-border rounded-2xl py-2 px-3.5 text-xs sm:text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300">Descripción</label>
+                  <textarea
+                    rows={4}
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="w-full bg-zentry-bg border border-zentry-border rounded-2xl py-2 px-3.5 text-xs sm:text-sm text-white focus:outline-none focus:border-purple-500 resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-zentry-border">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingEdit}
+                    className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>)}
+
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {inPortal(<AnimatePresence>
+        {showDeleteConfirm && (
+          <div 
+            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#18121a] border border-rose-500/40 rounded-3xl w-full max-w-sm p-6 shadow-2xl text-center space-y-4"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-black text-base text-white">¿Eliminar publicación?</h4>
+                <p className="text-xs text-zinc-300 mt-1.5 leading-relaxed">
+                  &ldquo;{currentPost.title}&rdquo; desaparecerá del Feed y de tu perfil junto con sus reacciones y comentarios. En tu Estudio quedará como borrador.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-zinc-300 bg-white/5 hover:bg-white/10 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeletePost}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-black text-white bg-rose-600 hover:bg-rose-500 shadow-md shadow-rose-600/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  Eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>)}
 
     </motion.div>
   )

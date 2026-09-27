@@ -1,6 +1,10 @@
 'use server'
 
-import { fetchAPI, ApiError } from '@/lib/api'
+import { fetchAPI } from '@/lib/api'
+import type { PostType } from '@/components/feed/FeedCard'
+import { mapBackendPost, type BackendPost } from '@/lib/mappers/post'
+import type { UserCosmetics } from '@/lib/shop'
+import { getImageUrl } from '@/lib/utils'
 
 type BackendTrending = {
   id: number
@@ -9,112 +13,84 @@ type BackendTrending = {
   postsCount: number
   isHot: boolean
   year: number
-  updatedAt: string
-}
-
-type BackendPost = {
-  id: number
-  authorUsername: string | null
-  authorName: string | null
-  title: string
-  contenido: string | null
-  imageUrl: string | null
-  likesCount: number
-  commentsCount: number
-  createdAt: string
-}
-
-type BackendProfile = {
-  username: string
-  name: string | null
-  bio: string | null
-  avatarUrl: string | null
-  followersCount: number
-  isFollowing: boolean
 }
 
 export type TrendingDTO = {
-  rank: number
+  id: string
   hashtag: string
   category: string
-  postsCount: string
+  postsCount: number
   isHot: boolean
   year: number
 }
 
-export type ArtDTO = {
-  id: string
-  title: string
-  author: string
-  handle: string
-  likes: number
-  comments: number
-  imageUrl?: string
-  year: number
-  color: string
+type BackendProfile = {
+  username: string
+  name: string
+  discipline: string | null
+  bio: string | null
+  avatarUrl?: string | null
+  avatar_url?: string | null
+  followersCount: number | null
+  isFollowing?: boolean
+  cosmetics?: UserCosmetics | null
 }
 
 export type UserDTO = {
-  id: string
-  name: string
   username: string
-  avatar: string
-  bio: string
+  name: string
+  discipline?: string
+  bio?: string
+  avatarUrl?: string
   followers: number
   isFollowing: boolean
+  cosmetics?: UserCosmetics | null
 }
 
-const CARD_COLORS = [
-  'from-purple-600/30 to-pink-600/30',
-  'from-blue-600/30 to-cyan-600/30',
-  'from-emerald-600/30 to-teal-600/30',
-  'from-amber-600/30 to-orange-600/30',
-];
-
-function toTrendingDTO(t: BackendTrending, index: number): TrendingDTO {
-  return {
-    rank: index + 1,
-    hashtag: t.hashtag,
-    category: t.category,
-    postsCount: `${t.postsCount.toLocaleString()} publicaciones`,
-    isHot: Boolean(t.isHot),
-    year: t.year,
-  }
+export type ExploreProjectDTO = {
+  id: string
+  title: string
+  description: string
+  projectType: string
+  coverUrl?: string
+  ownerUsername?: string
+  membersCount: number
+  likesCount: number
 }
 
-function toArtDTO(p: BackendPost, index: number): ArtDTO {
-  const author = p.authorName || p.authorUsername || 'Usuario Zentry'
-  return {
-    id: String(p.id),
-    title: p.title,
-    author,
-    handle: `@${p.authorUsername || author}`,
-    likes: p.likesCount ?? 0,
-    comments: p.commentsCount ?? 0,
-    imageUrl: p.imageUrl || undefined,
-    year: new Date(p.createdAt).getFullYear(),
-    color: CARD_COLORS[index % CARD_COLORS.length],
-  }
+export type ExploreCommunityDTO = {
+  id: string
+  slug: string
+  name: string
+  description: string
+  members: number
+  avatarUrl?: string
+  privacy: 'public' | 'private'
 }
 
-function toUserDTO(p: BackendProfile): UserDTO {
+function toTrending(t: BackendTrending): TrendingDTO {
+  return { id: String(t.id), hashtag: t.hashtag, category: t.category, postsCount: Number(t.postsCount || 0), isHot: Boolean(t.isHot), year: t.year }
+}
+
+function toUser(u: BackendProfile): UserDTO {
+  const avatar = u.avatarUrl || u.avatar_url
   return {
-    id: p.username,
-    name: p.name || p.username,
-    username: p.username,
-    avatar: (p.name || p.username).substring(0, 2).toUpperCase(),
-    bio: p.bio || '',
-    followers: p.followersCount ?? 0,
-    isFollowing: Boolean(p.isFollowing),
+    username: u.username,
+    name: u.name || u.username,
+    discipline: u.discipline || undefined,
+    bio: u.bio || undefined,
+    avatarUrl: avatar ? getImageUrl(avatar) : undefined,
+    followers: Number(u.followersCount || 0),
+    isFollowing: Boolean(u.isFollowing),
+    cosmetics: u.cosmetics ?? null,
   }
 }
 
 export async function fetchTrending(): Promise<{ success: boolean; data: TrendingDTO[] }> {
   try {
     const res: BackendTrending[] | null = await fetchAPI('/api/core/explore/trending')
-    return { success: true, data: (res || []).map(toTrendingDTO) }
-  } catch (error) {
-    console.error('Error fetching trending:', error)
+    return { success: Array.isArray(res), data: (res || []).map(toTrending) }
+  } catch {
     return { success: false, data: [] }
   }
 }
@@ -122,43 +98,71 @@ export async function fetchTrending(): Promise<{ success: boolean; data: Trendin
 export async function fetchTrendingHistory(year: number): Promise<{ success: boolean; data: TrendingDTO[] }> {
   try {
     const res: BackendTrending[] | null = await fetchAPI(`/api/core/explore/history?year=${year}`)
-    return { success: true, data: (res || []).map(toTrendingDTO) }
-  } catch (error) {
-    console.error(`Error fetching trending history for ${year}:`, error)
+    return { success: Array.isArray(res), data: (res || []).map(toTrending) }
+  } catch {
     return { success: false, data: [] }
   }
 }
 
-export async function fetchExplorePosts(): Promise<{ success: boolean; data: ArtDTO[] }> {
+/** Obras con más reacciones del último mes (con reacciones, marcos y permisos igual que en el feed) */
+export async function fetchPopularPosts(page = 0): Promise<{ success: boolean; data: PostType[] }> {
   try {
-    const res = await fetchAPI('/api/core/posts?size=24')
-    const list: BackendPost[] = res?.content || (Array.isArray(res) ? res : [])
-    return { success: true, data: list.map(toArtDTO) }
-  } catch (error) {
-    console.error('Error fetching explore posts:', error)
+    const res: BackendPost[] | null = await fetchAPI(`/api/core/explore/popular?page=${page}`)
+    return { success: Array.isArray(res), data: (res || []).map(mapBackendPost) }
+  } catch {
     return { success: false, data: [] }
   }
 }
 
-export async function likePostAction(postId: string): Promise<{ success: boolean; likes?: number }> {
+export async function fetchSuggestedCreators(): Promise<{ success: boolean; data: UserDTO[] }> {
   try {
-    const res: BackendPost | null = await fetchAPI(`/api/core/posts/${postId}/like`, { method: 'POST' })
-    return { success: !!res, likes: res?.likesCount }
-  } catch (error) {
-    console.error(`Error al dar me gusta a la publicación ${postId}:`, error)
-    return { success: false }
+    const res: BackendProfile[] | null = await fetchAPI('/api/core/explore/creators')
+    return { success: Array.isArray(res), data: (res || []).map(toUser) }
+  } catch {
+    return { success: false, data: [] }
   }
 }
 
-export async function searchExplore(query: string): Promise<{ success: boolean; users: UserDTO[]; arts: ArtDTO[] }> {
+export async function searchExplore(query: string): Promise<{
+  success: boolean
+  users: UserDTO[]
+  arts: PostType[]
+  projects: ExploreProjectDTO[]
+  communities: ExploreCommunityDTO[]
+  trending: TrendingDTO[]
+}> {
+  const empty = { users: [], arts: [], projects: [], communities: [], trending: [] }
   try {
-    const response = await fetchAPI(`/api/core/search?query=${encodeURIComponent(query)}`)
-    const users: BackendProfile[] = response?.users || []
-    const arts: BackendPost[] = response?.arts || []
-    return { success: true, users: users.map(toUserDTO), arts: arts.map(toArtDTO) }
-  } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Error de búsqueda'
-    console.error('Error searching explore:', message)
-    return { success: false, users: [], arts: [] }
+    const res = await fetchAPI(`/api/core/search?query=${encodeURIComponent(query)}`)
+    if (!res) return { success: false, ...empty }
+    return {
+      success: true,
+      users: (res.users || []).map(toUser),
+      arts: (res.arts || []).map(mapBackendPost),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      projects: (res.projects || []).map((p: any) => ({
+        id: String(p.id),
+        title: p.title,
+        description: p.description || '',
+        projectType: p.projectType || 'general',
+        coverUrl: p.coverUrl ? getImageUrl(p.coverUrl) : undefined,
+        ownerUsername: p.ownerUsername || undefined,
+        membersCount: Number(p.membersCount || 0),
+        likesCount: Number(p.likesCount || 0),
+      })),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      communities: (res.communities || []).map((c: any) => ({
+        id: String(c.id),
+        slug: c.slug,
+        name: c.nombre,
+        description: c.descripcion || '',
+        members: Number(c.membersCount || 0),
+        avatarUrl: c.avatarUrl ? getImageUrl(c.avatarUrl) : undefined,
+        privacy: c.privacy === 'private' ? 'private' : 'public',
+      })),
+      trending: (res.trending || []).map(toTrending),
+    }
+  } catch {
+    return { success: false, ...empty }
   }
 }

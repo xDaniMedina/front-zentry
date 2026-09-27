@@ -1,5 +1,7 @@
 "use client"
 
+import { mutate } from "swr";
+import { describeStreak } from "@/lib/streak";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,7 +16,7 @@ import {
   AchievementItem,
   getTodayDateString
 } from "@/lib/gamification";
-import { fetchDailyMissions, fetchAchievements, claimMission } from "@/lib/actions/gamification";
+import { fetchDailyMissions, fetchAchievements, claimMission, getStreakAction, UserStreakData } from "@/lib/actions/gamification";
 import { getUserStatsAction, UserSocialStats } from "@/lib/actions/friends";
 
 const RANK_TIERS = [
@@ -37,26 +39,29 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
   const [missions, setMissions] = useState<DailyMission[]>([]);
   const [achievements, setAchievements] = useState<AchievementItem[]>([]);
   const [stats, setStats] = useState<UserSocialStats | null>(null);
+  const [streakData, setStreakData] = useState<UserStreakData | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (mounted) {
+    if (mounted && isOpen) {
       const loadGamification = async () => {
-        const [missionsRes, achievementsRes, statsRes] = await Promise.all([
+        const [missionsRes, achievementsRes, statsRes, streakRes] = await Promise.all([
           fetchDailyMissions(),
           fetchAchievements(),
           getUserStatsAction(),
+          getStreakAction(),
         ]);
         if (missionsRes.success) setMissions(missionsRes.missions);
         if (achievementsRes.success) setAchievements(achievementsRes.achievements);
         if (statsRes.success && statsRes.data) setStats(statsRes.data);
+        if (streakRes.success && streakRes.data) setStreakData(streakRes.data);
       };
       loadGamification();
     }
-  }, [mounted, userKey]);
+  }, [mounted, isOpen, userKey]);
 
   // Manejo de tecla Escape y bloqueo de scroll en body
   useEffect(() => {
@@ -87,6 +92,10 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
 
       const newBalance = (user?.zentry_coins || 0) + coins;
       updateUser({ zentry_coins: newBalance });
+      // Saldo real del backend en sidebar, tienda y billetera
+      mutate('userStats');
+      mutate('walletBalance');
+      mutate('dailyMissions');
 
       toast.success(`¡Recompensa reclamada! +${coins} Zentry Coins para @${user?.username || 'ti'} 🎉`);
     } else {
@@ -95,6 +104,7 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
   };
 
   const totalMissionsCompleted = missions.filter(m => m.currentProgress >= m.targetProgress).length;
+  const streak = describeStreak(streakData, totalMissionsCompleted);
   const totalAchievementsUnlocked = achievements.filter(a => a.isUnlocked).length;
   const mysteriousCount = achievements.filter(a => a.rarity === 'mysterious').length;
   const mysteriousUnlockedCount = achievements.filter(a => a.rarity === 'mysterious' && a.isUnlocked).length;
@@ -133,6 +143,12 @@ export default function MissionsModal({ isOpen, onClose }: { isOpen: boolean; on
                   <h2 className="text-lg sm:text-xl font-black text-white">Centro de Misiones & Logros</h2>
                   <span className="text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
                     {stats ? `${stats.rank}` : 'Cargando rango...'}
+                  </span>
+                  <span
+                    title={streak.tooltip}
+                    className={`text-[10px] font-black px-2 py-0.5 rounded-full border flex items-center gap-1 ${streak.lit ? 'text-orange-400 bg-orange-500/20 border-orange-500/30' : streak.atRisk ? 'text-amber-300 bg-amber-500/15 border-amber-500/30 animate-pulse' : 'text-zinc-400 bg-zinc-800/50 border-zinc-700'}`}
+                  >
+                    🔥 {streak.days} {streak.days === 1 ? 'día' : 'días'} · {streak.lit ? 'Encendida' : streak.atRisk ? `¡En riesgo${streakData?.hoursLeftToday != null ? ` (${streakData.hoursLeftToday} h)` : ''}!` : 'Apagada'}
                   </span>
                 </div>
                 <p className="text-xs text-zentry-text-2">

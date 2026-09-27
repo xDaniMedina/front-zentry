@@ -1,7 +1,6 @@
 'use server'
 
 import { fetchAPI, ApiError } from '@/lib/api'
-import { revalidatePath } from 'next/cache'
 import { Conversation, Message } from '@/types'
 
 type BackendConversationSummary = {
@@ -9,6 +8,12 @@ type BackendConversationSummary = {
   isGroup: boolean
   name: string | null
   otherUserId: number | null
+  otherUsername?: string | null
+  otherName?: string | null
+  otherAvatarUrl?: string | null
+  otherUserFrame?: string | null
+  otherUserPet?: string | null
+  otherUserTitle?: string | null
   lastMessageContent: string | null
   lastMessageSenderId: number | null
   lastMessageAt: string | null
@@ -49,8 +54,27 @@ export async function getConversations(): Promise<{ success: boolean; data: Conv
       if (c.isGroup) {
         return { ...c, displayName: c.name || 'Grupo', displayAvatarUrl: null }
       }
-      const { displayName, displayAvatarUrl } = await resolveOtherUserDisplay(c.otherUserId)
-      return { ...c, displayName, displayAvatarUrl }
+      // Si el backend ya nos envía el perfil enriquecido, priorizarlo
+      let displayName = c.otherName || (c.otherUsername ? `@${c.otherUsername}` : null)
+      let displayAvatarUrl = c.otherAvatarUrl || null
+
+      if (!displayName) {
+        const resolved = await resolveOtherUserDisplay(c.otherUserId)
+        displayName = resolved.displayName
+        displayAvatarUrl = displayAvatarUrl || resolved.displayAvatarUrl
+      }
+
+      return {
+        ...c,
+        displayName: displayName || `Usuario #${c.otherUserId}`,
+        displayAvatarUrl,
+        otherUsername: c.otherUsername || null,
+        otherName: c.otherName || null,
+        otherAvatarUrl: c.otherAvatarUrl || null,
+        otherUserFrame: c.otherUserFrame || null,
+        otherUserPet: c.otherUserPet || null,
+        otherUserTitle: c.otherUserTitle || null
+      }
     }))
     return { success: true, data }
   } catch (error) {
@@ -106,7 +130,6 @@ export async function sendMessageAction(
       return { success: false, error: 'No se pudo enviar el mensaje' }
     }
 
-    revalidatePath('/messages')
     return { success: true, data: res }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Error de conexión al enviar el mensaje'
@@ -118,7 +141,6 @@ export async function sendMessageAction(
 export async function deleteMessageAction(messageId: number): Promise<{ success: boolean; error?: string }> {
   try {
     await fetchAPI(`/api/realtime/messages/${messageId}`, { method: 'DELETE' })
-    revalidatePath('/messages')
     return { success: true }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'No se pudo eliminar el mensaje'

@@ -1,5 +1,6 @@
 "use client"
 
+import NotificationPrefsPanel from "@/components/shared/NotificationPrefsPanel";
 import { useState, useEffect } from "react";
 import {
   Settings, User, Shield, Bell, Palette, CreditCard, KeyRound, Save, Moon, Sun,
@@ -34,11 +35,7 @@ export default function SettingsClient() {
   const [showSavedPosts, setShowSavedPosts] = useState(true);
   const [showLikedPosts, setShowLikedPosts] = useState(true);
 
-  // Notification States (preferencia local del dispositivo, no hay backend de notificaciones push aún)
-  const [notifyLikes, setNotifyLikes] = useState(true);
-  const [notifyComments, setNotifyComments] = useState(true);
-  const [notifyMentions, setNotifyMentions] = useState(true);
-  const [notifyEmail, setNotifyEmail] = useState(false);
+
 
   // Appearance
   const [autoplayMedia, setAutoplayMedia] = useState(true);
@@ -65,23 +62,13 @@ export default function SettingsClient() {
     });
 
     try {
-      const savedPrefs = JSON.parse(localStorage.getItem('zentry_notification_prefs') || '{}');
-      if (typeof savedPrefs.notifyLikes === 'boolean') setNotifyLikes(savedPrefs.notifyLikes);
-      if (typeof savedPrefs.notifyComments === 'boolean') setNotifyComments(savedPrefs.notifyComments);
-      if (typeof savedPrefs.notifyMentions === 'boolean') setNotifyMentions(savedPrefs.notifyMentions);
-      if (typeof savedPrefs.notifyEmail === 'boolean') setNotifyEmail(savedPrefs.notifyEmail);
       const appearancePrefs = JSON.parse(localStorage.getItem('zentry_appearance_prefs') || '{}');
       if (typeof appearancePrefs.autoplayMedia === 'boolean') setAutoplayMedia(appearancePrefs.autoplayMedia);
     } catch { /* localStorage no disponible o corrupto: usar valores por defecto */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const persistNotificationPrefs = (next: Partial<{ notifyLikes: boolean; notifyComments: boolean; notifyMentions: boolean; notifyEmail: boolean }>) => {
-    try {
-      const current = { notifyLikes, notifyComments, notifyMentions, notifyEmail, ...next };
-      localStorage.setItem('zentry_notification_prefs', JSON.stringify(current));
-    } catch { /* ignore */ }
-  };
+
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -321,34 +308,10 @@ export default function SettingsClient() {
             <div className="space-y-6">
               <div className="border-b border-zentry-border pb-4">
                 <h2 className="text-lg font-extrabold text-zentry-text-1">Preferencias de Notificaciones</h2>
-                <p className="text-xs text-zentry-text-2">Configura las alertas que deseas recibir en este dispositivo.</p>
+                <p className="text-xs text-zentry-text-2">Elige qué avisos quieres recibir. Se guardan en tu cuenta.</p>
               </div>
 
-              <div className="space-y-4 text-xs">
-                {[
-                  { key: 'notifyLikes' as const, state: notifyLikes, setState: setNotifyLikes, title: 'Notificaciones de Me Gusta', desc: 'Recibe una alerta cuando alguien reaccione a tus obras' },
-                  { key: 'notifyComments' as const, state: notifyComments, setState: setNotifyComments, title: 'Notificaciones de Comentarios', desc: 'Recibe una alerta cuando alguien comente tu publicación' },
-                  { key: 'notifyMentions' as const, state: notifyMentions, setState: setNotifyMentions, title: 'Menciones y Etiquetas', desc: 'Notificar cuando te mencionen en un post o comentario' },
-                  { key: 'notifyEmail' as const, state: notifyEmail, setState: setNotifyEmail, title: 'Resumen por Correo Electrónico', desc: 'Recibe un resumen semanal con las tendencias más destacadas' },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between p-4 bg-zentry-bg border border-zentry-border rounded-2xl">
-                    <div>
-                      <h3 className="font-extrabold text-zentry-text-1 text-sm">{item.title}</h3>
-                      <p className="text-zentry-text-2 mt-0.5">{item.desc}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const next = !item.state;
-                        item.setState(next);
-                        persistNotificationPrefs({ [item.key]: next });
-                      }}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${item.state ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.state ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <NotificationPrefsPanel />
             </div>
           )}
 

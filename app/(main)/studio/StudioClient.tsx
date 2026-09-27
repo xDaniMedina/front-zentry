@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import {
@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { StudioProject } from "@/types";
-import { createStudioProjectAction, deleteStudioProjectAction, publishStudioProjectAction } from "@/lib/actions/studio";
+import { createStudioProjectAction, deleteStudioProjectAction, getStudioProjects, publishStudioProjectAction } from "@/lib/actions/studio";
+import PublishCelebration from "@/components/shared/PublishCelebration";
 
 export type ContentType = 'canvas' | 'document' | 'image' | 'video' | 'audio';
 
@@ -20,10 +21,28 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
   const [files, setFiles] = useState<StudioProject[]>(() => initialFiles || []);
   const router = useRouter();
 
+  // Lo publicado desde el feed (u otra pestaña) aparece aquí sin recargar la página
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      getStudioProjects().then(res => {
+        if (res.success && res.data) setFiles(res.data);
+      });
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
+
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'published'>('all');
   const [searchQuery, setSearchQuery] = useState("");
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [justPublished, setJustPublished] = useState<StudioProject | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
@@ -141,7 +160,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
     return matchesFilter && matchesSearch && matchesStatus;
   });
 
-  const handlePublishProject = async (e: React.MouseEvent, id: string, title: string) => {
+  const handlePublishProject = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setPublishingId(id);
     const res = await publishStudioProjectAction(id);
@@ -149,7 +168,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
 
     if (res.success && res.data) {
       setFiles(prev => prev.map(p => p.id === id ? res.data! : p));
-      toast.success(`"${title}" se publicó en el feed 🎉`);
+      setJustPublished(res.data);
     } else {
       toast.error(res.error || "No se pudo publicar el proyecto");
     }
@@ -321,7 +340,7 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
                     <span className="text-zentry-accent group-hover:translate-x-1 transition-transform">Abrir →</span>
                   ) : (
                     <button
-                      onClick={(e) => handlePublishProject(e, file.id, file.title)}
+                      onClick={(e) => handlePublishProject(e, file.id)}
                       disabled={publishingId === file.id}
                       className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
                       title="Publicar en el feed"
@@ -479,6 +498,16 @@ export default function StudioClient({ initialFiles }: { initialFiles: StudioPro
         )}
       </AnimatePresence>
 
+      <PublishCelebration
+        open={Boolean(justPublished)}
+        title={justPublished?.title}
+        mediaType={justPublished?.type === 'document' ? 'text' : justPublished?.type === 'canvas' ? 'image' : justPublished?.type}
+        mediaUrl={justPublished?.thumbnail_url}
+        onClose={() => {
+          setJustPublished(null);
+          router.push('/feed');
+        }}
+      />
     </div>
   )
 }

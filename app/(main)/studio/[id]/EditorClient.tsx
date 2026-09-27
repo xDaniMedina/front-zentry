@@ -1,5 +1,6 @@
 "use client"
 
+import PublishCelebration from "@/components/shared/PublishCelebration";
 import { useState, useRef, useEffect, useTransition, ElementType } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
@@ -47,6 +48,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
   const [zoom, setZoom] = useState<number>(initialProject?.metadata?.zoom || 100);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedOk, setPublishedOk] = useState(false);
   const [saved, setSaved] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>(fileType === 'image' ? 'filtros' : 'capas');
   const [, startTransition] = useTransition();
@@ -551,8 +553,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
       if (!isNaN(Number(targetProjectId)) && Number(targetProjectId) > 0) {
         const pubRes = await publishStudioProjectAction(targetProjectId);
         if (pubRes.success) {
-          toast.success("🚀 ¡Tu obra ha sido publicada exitosamente en el Feed principal!");
-          router.push('/feed');
+          setPublishedOk(true);
           return;
         }
       }
@@ -575,8 +576,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
       });
 
       if (postRes.success) {
-        toast.success("🚀 ¡Tu obra ha sido publicada exitosamente en el Feed principal!");
-        router.push('/feed');
+        setPublishedOk(true);
       } else {
         toast.error(postRes.error || "No se pudo publicar la obra en el feed");
       }
@@ -987,7 +987,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
         </div>
 
         <div className="flex-1 bg-[#101014] overflow-y-auto p-4 sm:p-8 flex justify-center custom-scrollbar">
-          <div className="max-w-4xl w-full bg-zentry-card border border-zentry-border rounded-3xl p-6 sm:p-12 shadow-2xl min-h-[750px] flex flex-col space-y-6">
+          <div className="max-w-4xl w-full bg-zentry-card border border-zentry-border rounded-3xl p-6 sm:p-12 shadow-2xl min-h-[60vh] flex flex-col space-y-6">
             <input 
               type="text" 
               value={title} 
@@ -1012,7 +1012,7 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
               spellCheck={false}
               autoComplete="off"
               style={{ textAlign: docAlignment }}
-              className="w-full flex-1 bg-transparent text-sm sm:text-base leading-relaxed text-zentry-text-1 focus:outline-none resize-none custom-scrollbar font-sans min-h-[500px]"
+              className="w-full flex-1 bg-transparent text-sm sm:text-base leading-relaxed text-zentry-text-1 focus:outline-none resize-none custom-scrollbar font-sans min-h-[40vh]"
             />
           </div>
         </div>
@@ -1296,6 +1296,15 @@ export default function EditorClient({ canvasId, initialProject }: EditorClientP
         {(fileType === 'video' || fileType === 'audio') && renderMediaWorkspace()}
       </div>
 
+      <PublishCelebration
+        open={publishedOk}
+        title={title}
+        mediaType={fileType === 'document' ? 'text' : fileType === 'canvas' ? 'image' : fileType}
+        onClose={() => {
+          setPublishedOk(false);
+          router.push('/feed');
+        }}
+      />
     </div>
   );
 }

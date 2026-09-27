@@ -63,3 +63,28 @@ export async function updatePrivacySettings(data: PrivacySettings) {
     return { success: false, message: 'Failed to update privacy settings' };
   }
 }
+
+export type NotificationPrefs = {
+  notifyReactions: boolean;
+  notifyComments: boolean;
+  notifyMessages: boolean;
+  notifyStories: boolean;
+};
+
+/** Preferencias de notificación guardadas en el perfil: el backend deja de generar las desactivadas. */
+export async function updateNotificationPrefsAction(data: Partial<NotificationPrefs>) {
+  try {
+    const response = await fetchAPI('/api/core/profiles/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (!response) {
+      return { success: false, message: 'No se pudieron guardar tus preferencias' };
+    }
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudieron guardar tus preferencias';
+    console.error('Error updating notification prefs:', error);
+    return { success: false, message };
+  }
+}

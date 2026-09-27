@@ -23,7 +23,6 @@ export async function markNotificationReadAction(notificationId: string | number
     const res = await fetchAPI(`/api/core/notifications/${notificationId}/read`, {
       method: 'PUT',
     })
-    revalidatePath('/notifications')
     return { success: !!res }
   } catch (error) {
     console.error(`Error al marcar notificación ${notificationId} como leída:`, error)
@@ -36,7 +35,6 @@ export async function markAllNotificationsReadAction(): Promise<{ success: boole
     const res = await fetchAPI('/api/core/notifications/read-all', {
       method: 'PUT',
     })
-    revalidatePath('/notifications')
     return { success: !!res }
   } catch (error) {
     console.error('Error al marcar todas las notificaciones como leídas:', error)
@@ -54,5 +52,14 @@ export async function clearNotificationsAction(): Promise<{ success: boolean }> 
   } catch (error) {
     console.error('Error al vaciar notificaciones:', error)
     return { success: false }
+  }
+}
+
+export async function getUnreadNotificationsCountAction(): Promise<number> {
+  try {
+    const res: { count?: number } | null = await fetchAPI('/api/core/notifications/unread-count')
+    return typeof res?.count === 'number' ? res.count : 0
+  } catch {
+    return 0
   }
 }

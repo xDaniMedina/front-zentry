@@ -1,6 +1,8 @@
 "use client"
 
+import QuotesCard from "./QuotesCard";
 import { useState, useEffect, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell, Users, Check, X, Flame, Settings, Shield,
@@ -20,10 +22,10 @@ import {
   getPendingFriendRequestsAction,
   acceptFriendRequestAction,
   rejectFriendRequestAction,
-  pingPresenceAction,
 } from "@/lib/actions/friends";
 import { getMyProfileAction } from "@/lib/actions/profile";
 import { updatePrivacySettings } from "@/lib/actions/settings";
+import NotificationPrefsPanel from "@/components/shared/NotificationPrefsPanel";
 import { fetchDailyMissions } from "@/lib/actions/gamification";
 import { DailyMission } from "@/lib/gamification";
 import { getActiveAdsAction, AdDTO } from "@/lib/actions/ads";
@@ -60,11 +62,9 @@ export default function RightSidebar() {
   const [showSavedPosts, setShowSavedPosts] = useState(true);
   const [showLikedPosts, setShowLikedPosts] = useState(true);
 
-  // Notificaciones: preferencia local del dispositivo (no hay backend de push aún)
-  const [notifyLikes, setNotifyLikes] = useState(true);
-  const [notifyComments, setNotifyComments] = useState(true);
-  const [notifyMentions, setNotifyMentions] = useState(true);
-  const [notifyEmail, setNotifyEmail] = useState(false);
+  // El aside tiene backdrop-blur: un modal "fixed" dentro quedaría encerrado en la columna.
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => setPortalReady(true), []);
 
   useEffect(() => {
     if (!showSettingsDrawer) return;
@@ -78,14 +78,14 @@ export default function RightSidebar() {
       }
       setIsPrivacyLoading(false);
     });
+  }, [showSettingsDrawer]);
 
-    try {
-      const savedPrefs = JSON.parse(localStorage.getItem('zentry_notification_prefs') || '{}');
-      if (typeof savedPrefs.notifyLikes === 'boolean') setNotifyLikes(savedPrefs.notifyLikes);
-      if (typeof savedPrefs.notifyComments === 'boolean') setNotifyComments(savedPrefs.notifyComments);
-      if (typeof savedPrefs.notifyMentions === 'boolean') setNotifyMentions(savedPrefs.notifyMentions);
-      if (typeof savedPrefs.notifyEmail === 'boolean') setNotifyEmail(savedPrefs.notifyEmail);
-    } catch { /* localStorage no disponible o corrupto: usar valores por defecto */ }
+  // Cerrar Ajustes con Escape
+  useEffect(() => {
+    if (!showSettingsDrawer) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowSettingsDrawer(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [showSettingsDrawer]);
 
   const handleTogglePrivacy = async (field: 'isPrivate' | 'showSavedPosts' | 'showLikedPosts', value: boolean) => {
@@ -112,12 +112,6 @@ export default function RightSidebar() {
     }
   };
 
-  const persistNotificationPrefs = (next: Partial<{ notifyLikes: boolean; notifyComments: boolean; notifyMentions: boolean; notifyEmail: boolean }>) => {
-    try {
-      const current = { notifyLikes, notifyComments, notifyMentions, notifyEmail, ...next };
-      localStorage.setItem('zentry_notification_prefs', JSON.stringify(current));
-    } catch { /* ignore */ }
-  };
 
 
   // Carga de misiones diarias reales tras montaje (definen si la racha está encendida)
@@ -155,16 +149,22 @@ export default function RightSidebar() {
     }
   };
 
+  // La presencia la envía PresencePing; aquí solo se refrescan amigos y solicitudes,
+  // cada 45 s y únicamente con la pestaña visible (antes: cada 15 s y con ping duplicado)
   useEffect(() => {
     fetchSocialData();
-    pingPresenceAction('online');
 
     const interval = setInterval(() => {
-      fetchSocialData();
-      pingPresenceAction('online');
-    }, 15000);
+      if (document.visibilityState === 'visible') fetchSocialData();
+    }, 45000);
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchSocialData(); };
+    document.addEventListener('visibilitychange', onVisible);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.username, user?.id]);
 
   const acceptRequest = (requestId: number, senderName: string) => {
@@ -357,7 +357,7 @@ export default function RightSidebar() {
                     </div>
                   </Link>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                     <Link 
                       href={`/messages?user=${encodeURIComponent(friend.username)}`}
                       className="p-1.5 bg-zentry-card hover:bg-zentry-accent hover:text-white text-zentry-text-2 rounded-xl transition-colors border border-zentry-border"
@@ -368,9 +368,17 @@ export default function RightSidebar() {
                   </div>
                 </div>
               ))}
+              {onlineFriends.length > 5 && (
+                <Link href="/friends" className="block text-center text-[11px] font-black text-zentry-accent hover:underline pt-1">
+                  Ver los {onlineFriends.length} amigos en línea →
+                </Link>
+              )}
             </div>
           )}
         </div>
+
+        {/* 3.2. FRASES CÉLEBRES */}
+        <QuotesCard />
 
         {/* 3.5. ANUNCIO PATROCINADO */}
         {sidebarAd && <AdCard ad={sidebarAd} variant="sidebar" />}
@@ -404,15 +412,22 @@ export default function RightSidebar() {
       {/* Modal de Misiones Diarias */}
       <MissionsModal isOpen={isMissionsOpen} onClose={() => setIsMissionsOpen(false)} />
 
-      {/* MODAL / DRAWER DE AJUSTES GLOBALES */}
-      <AnimatePresence>
+      {/* MODAL / DRAWER DE AJUSTES GLOBALES (en portal para cubrir toda la pantalla) */}
+      {portalReady && createPortal(<AnimatePresence>
         {showSettingsDrawer && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div
+            className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md"
+            onClick={() => setShowSettingsDrawer(false)}
+          >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Ajustes globales"
+              className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90dvh]"
             >
               <div className="p-5 border-b border-zentry-border flex justify-between items-center bg-zentry-bg">
                 <div className="flex items-center gap-2">
@@ -427,7 +442,7 @@ export default function RightSidebar() {
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto space-y-6">
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
                 <div className="flex gap-2 overflow-x-auto pb-1 border-b border-zentry-border">
                   {[
                     { id: 'privacy', label: 'Privacidad', icon: Shield },
@@ -511,33 +526,7 @@ export default function RightSidebar() {
                   )
                 )}
 
-                {activeTab === 'notifications' && (
-                  <div className="space-y-4">
-                    {[
-                      { key: 'notifyLikes' as const, state: notifyLikes, setState: setNotifyLikes, title: 'Me Gusta', desc: 'Alerta cuando alguien reaccione a tus obras' },
-                      { key: 'notifyComments' as const, state: notifyComments, setState: setNotifyComments, title: 'Comentarios', desc: 'Alerta cuando alguien comente tu publicación' },
-                      { key: 'notifyMentions' as const, state: notifyMentions, setState: setNotifyMentions, title: 'Menciones y Etiquetas', desc: 'Cuando te mencionen en un post o comentario' },
-                      { key: 'notifyEmail' as const, state: notifyEmail, setState: setNotifyEmail, title: 'Resumen por Correo', desc: 'Resumen semanal de tendencias por email' },
-                    ].map((item) => (
-                      <div key={item.key} className="p-4 bg-zentry-bg rounded-2xl border border-zentry-border flex items-center justify-between gap-3">
-                        <div>
-                          <h4 className="font-extrabold text-sm text-zentry-text-1">{item.title}</h4>
-                          <p className="text-xs text-zentry-text-2">{item.desc}</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const next = !item.state;
-                            item.setState(next);
-                            persistNotificationPrefs({ [item.key]: next });
-                          }}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${item.state ? 'bg-zentry-accent' : 'bg-zentry-border'}`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${item.state ? 'translate-x-6' : 'translate-x-1'}`} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {activeTab === 'notifications' && <NotificationPrefsPanel />}
 
                 {activeTab === 'appearance' && (
                   <div className="space-y-4">
@@ -576,7 +565,7 @@ export default function RightSidebar() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
 
       <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} />
     </aside>

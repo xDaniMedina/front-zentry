@@ -3,91 +3,7 @@
 import { fetchAPI, ApiError } from '@/lib/api'
 import { revalidatePath } from 'next/cache'
 import { PostType, CommentItem } from '@/components/feed/FeedCard'
-import { getImageUrl } from '@/lib/utils'
-
-type BackendPost = {
-  id: number
-  authorUsername: string | null
-  authorAvatar: string | null
-  authorName: string | null
-  authorDiscipline: string | null
-  title: string
-  contenido: string | null
-  content_type: string | null
-  thumbnail_url: string | null
-  image_url: string | null
-  mediaUrls?: string[] | null
-  visibility: string
-  communityId: number | null
-  tools: string[] | null
-  likesCount: number
-  commentsCount: number
-  liked: boolean
-  saved: boolean
-  createdAt: string
-  updatedAt: string | null
-}
-
-type BackendComment = {
-  id: number
-  postId: number
-  userId: number
-  authorUsername: string | null
-  authorAvatarUrl: string | null
-  content: string
-  createdAt: string
-}
-
-function mapBackendPost(p: BackendPost): PostType {
-  const rawUrl = p.image_url || p.thumbnail_url || (p.mediaUrls && p.mediaUrls.length > 0 ? p.mediaUrls[0] : undefined);
-  const mediaUrl = rawUrl ? getImageUrl(rawUrl) : undefined;
-  const avatarUrl = p.authorAvatar ? getImageUrl(p.authorAvatar) : undefined;
-
-  let mediaType = p.content_type || 'image';
-
-  if (rawUrl) {
-    const lowerUrl = rawUrl.toLowerCase();
-    if (lowerUrl.match(/\.(mp4|webm|mov|mkv)(\?|$)/i) || lowerUrl.startsWith('data:video/')) {
-      mediaType = 'video';
-    } else if (lowerUrl.match(/\.(mp3|wav|ogg|m4a|aac)(\?|$)/i) || lowerUrl.startsWith('data:audio/')) {
-      mediaType = 'audio';
-    } else if (lowerUrl.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp)(\?|$)/i) || lowerUrl.startsWith('data:image/')) {
-      mediaType = 'image';
-    }
-  }
-
-  if (mediaType !== 'image' && mediaType !== 'video' && mediaType !== 'audio' && mediaType !== 'text') {
-    mediaType = rawUrl ? 'image' : 'text';
-  }
-
-  return {
-    id: p.id,
-    author: p.authorName || p.authorUsername || 'Creador Zentry',
-    handle: `@${p.authorUsername || 'creador'}`,
-    avatar_url: avatarUrl,
-    discipline: p.authorDiscipline || undefined,
-    created_at: p.createdAt,
-    title: p.title,
-    description: p.contenido || undefined,
-    media_type: mediaType as 'image' | 'video' | 'audio' | 'text',
-    media_url: mediaUrl,
-    likes: p.likesCount || 0,
-    comments: p.commentsCount || 0,
-    tags: p.tools || [],
-    liked: Boolean(p.liked),
-    saved: Boolean(p.saved),
-  }
-}
-
-function mapBackendComment(c: BackendComment): CommentItem {
-  return {
-    id: String(c.id),
-    author: c.authorUsername || 'Creador',
-    handle: `@${c.authorUsername || 'creador'}`,
-    text: c.content,
-    time: c.createdAt,
-  }
-}
+import { mapBackendPost, mapBackendComment, type BackendPost, type BackendComment } from '@/lib/mappers/post'
 
 export async function getFeedPosts(page: number = 0): Promise<{ success: boolean; data?: PostType[]; hasMore?: boolean; error?: string }> {
   try {
@@ -130,6 +46,7 @@ export async function createPostAction(payload: {
     }
 
     revalidatePath('/feed')
+    revalidatePath('/studio')
     return { success: true, data: mapBackendPost(res) }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Error en el servidor al publicar'
@@ -138,16 +55,41 @@ export async function createPostAction(payload: {
   }
 }
 
-export async function toggleLikePostAction(postId: string | number): Promise<{ success: boolean; liked?: boolean; likes?: number; error?: string }> {
+/**
+ * Publicación con archivo (imagen/video/audio) vía multipart: evita convertir el archivo a base64
+ * (bloqueaba el navegador con videos) y usa un timeout largo para subidas pesadas.
+ * formData: title, contenido, contentType, tools, image (File)
+ */
+export async function createPostWithMediaAction(formData: FormData): Promise<{ success: boolean; data?: PostType; error?: string }> {
+  try {
+    formData.set('visibility', 'public')
+    const res: BackendPost | null = await fetchAPI('/api/core/posts', {
+      method: 'POST',
+      body: formData,
+      timeoutMs: 5 * 60 * 1000,
+    })
+    if (!res || !res.id) {
+      return { success: false, error: 'No se pudo subir tu obra. Revisa tu sesión e inténtalo de nuevo.' }
+    }
+    revalidatePath('/feed')
+    revalidatePath('/studio')
+    return { success: true, data: mapBackendPost(res) }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Error en el servidor al subir el archivo'
+    console.error('Error al crear post con archivo:', error)
+    return { success: false, error: message }
+  }
+}
+
+export async function toggleLikePostAction(postId: string | number): Promise<{ success: boolean; liked?: boolean; likes?: number; data?: PostType; error?: string }> {
   try {
     const res: BackendPost | null = await fetchAPI(`/api/core/posts/${postId}/like`, {
       method: 'POST',
     })
-    if (!res) {
+    if (!res || !res.id) {
       return { success: false, error: 'No se pudo procesar tu reacción' }
     }
-    revalidatePath('/feed')
-    return { success: true, liked: res.liked, likes: res.likesCount }
+    return { success: true, liked: res.liked, likes: res.likesCount, data: mapBackendPost(res) }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'No se pudo dar me gusta'
     console.error('Error al dar me gusta:', error)
@@ -232,5 +174,129 @@ export async function addPostCommentAction(postId: string | number, content: str
     const message = error instanceof ApiError ? error.message : 'No se pudo publicar tu comentario'
     console.error('Error al comentar:', error)
     return { success: false, error: message }
+  }
+}
+
+export async function editPostCommentAction(commentId: string | number, content: string): Promise<{ success: boolean; data?: CommentItem; error?: string }> {
+  try {
+    const res: BackendComment | null = await fetchAPI(`/api/core/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    })
+    if (!res) {
+      return { success: false, error: 'No se pudo actualizar el comentario' }
+    }
+    return { success: true, data: mapBackendComment(res) }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo editar el comentario'
+    console.error('Error al editar comentario:', error)
+    return { success: false, error: message }
+  }
+}
+
+export async function deletePostCommentAction(commentId: string | number): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetchAPI(`/api/core/comments/${commentId}`, {
+      method: 'DELETE',
+    })
+    if (!res) {
+      return { success: false, error: 'No tienes permiso para eliminar este comentario' }
+    }
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo eliminar el comentario'
+    console.error('Error al eliminar comentario:', error)
+    return { success: false, error: message }
+  }
+}
+
+export async function toggleLikeCommentAction(commentId: string | number): Promise<{ success: boolean; data?: CommentItem; error?: string }> {
+  try {
+    const res: BackendComment | null = await fetchAPI(`/api/core/comments/${commentId}/like`, {
+      method: 'POST',
+    })
+    if (!res) {
+      return { success: false, error: 'No se pudo reaccionar al comentario' }
+    }
+    return { success: true, data: mapBackendComment(res) }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo reaccionar al comentario'
+    console.error('Error al dar me gusta al comentario:', error)
+    return { success: false, error: message }
+  }
+}
+
+
+export async function updatePostAction(
+  postId: string | number,
+  payload: { title: string; description?: string }
+): Promise<{ success: boolean; data?: PostType; error?: string }> {
+  try {
+    const res: BackendPost | null = await fetchAPI(`/api/core/posts/${postId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: payload.title,
+        contenido: payload.description,
+      }),
+    })
+    if (!res) {
+      return { success: false, error: 'No se pudo actualizar la publicación' }
+    }
+    revalidatePath('/feed')
+    revalidatePath('/studio')
+    return { success: true, data: mapBackendPost(res) }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Error al actualizar la publicación'
+    console.error('Error al actualizar publicación:', error)
+    return { success: false, error: message }
+  }
+}
+
+export async function deletePostAction(
+  postId: string | number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetchAPI(`/api/core/posts/${postId}`, {
+      method: 'DELETE',
+    })
+    if (!res) {
+      return { success: false, error: 'No tienes permiso para eliminar esta publicación' }
+    }
+    revalidatePath('/feed')
+    revalidatePath('/studio')
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Error al eliminar la publicación'
+    console.error('Error al eliminar publicación:', error)
+    return { success: false, error: message }
+  }
+}
+
+/** Reacción con emoji: repetir la misma la quita, otra distinta la reemplaza. Devuelve la obra actualizada. */
+export async function reactToPostAction(postId: string | number, type: string): Promise<{ success: boolean; data?: PostType; error?: string }> {
+  try {
+    const res: BackendPost | null = await fetchAPI(`/api/core/posts/${postId}/react`, {
+      method: 'POST',
+      body: JSON.stringify({ type }),
+    })
+    if (!res || !res.id) {
+      return { success: false, error: 'No se pudo registrar tu reacción' }
+    }
+    return { success: true, data: mapBackendPost(res) }
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'No se pudo registrar tu reacción'
+    console.error('Error al reaccionar:', error)
+    return { success: false, error: message }
+  }
+}
+
+export async function getPostByIdAction(postId: string | number): Promise<{ success: boolean; data?: PostType }> {
+  try {
+    const res: BackendPost | null = await fetchAPI(`/api/core/posts/${postId}`)
+    if (!res || !res.id) return { success: false }
+    return { success: true, data: mapBackendPost(res) }
+  } catch (error) {
+    console.error('Error al obtener la publicación:', error)
+    return { success: false }
   }
 }

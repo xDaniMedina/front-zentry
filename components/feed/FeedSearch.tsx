@@ -1,5 +1,6 @@
 "use client"
 
+import UserAvatar from "@/components/shared/UserAvatar"
 import { useState, useEffect } from "react"
 import { Search, Loader2, X, TrendingUp, Hash } from "lucide-react"
 import Link from "next/link"
@@ -149,9 +150,7 @@ export function FeedSearch({
                   className="flex items-center justify-between p-3.5 hover:bg-zentry-bg transition-colors group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-950/50 border border-purple-500/30 flex items-center justify-center text-xs font-bold text-purple-300 group-hover:border-zentry-accent transition-colors overflow-hidden">
-                      {res.name?.slice(0, 2).toUpperCase() || res.username.slice(0, 2).toUpperCase()}
-                    </div>
+                    <UserAvatar name={res.name || res.username} avatarUrl={res.avatarUrl} size={40} />
                     <div>
                       <h4 className="text-xs sm:text-sm font-bold text-zentry-text-1 group-hover:text-zentry-accent transition-colors">
                         {res.name}

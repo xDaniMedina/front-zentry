@@ -1,7 +1,9 @@
 "use client"
 
+import { useMyAvatar } from "@/lib/hooks/useMyAvatar"
+import { applyReactionLocally } from "@/lib/reactions"
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { motion, Variants, AnimatePresence } from "framer-motion"
+import { motion, Variants } from "framer-motion"
 import Image from "next/image"
 import { Stories } from "@/components/feed/Stories"
 import StoryViewer from "@/components/feed/StoryViewer"
@@ -11,16 +13,17 @@ import { FeedTabs } from "@/components/feed/FeedTabs"
 import { FeedLayoutControls } from "@/components/feed/FeedLayoutControls"
 import { FeedCard, PostType } from "@/components/feed/FeedCard"
 import CreatePostModal from "@/components/feed/CreatePostModal"
+import PostDetailModal from "@/components/feed/PostDetailModal"
 import { 
-  X, Send, Sparkles, Image as ImageIcon, Video, Music, 
-  FileText, MessageSquare, Loader2, Radio, Bell, Tv
+  Sparkles, Image as ImageIcon, Video, Music,
+  FileText, Loader2, Radio, Bell, Tv
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/context/AuthContext"
-import { getImageUrl, getInitials, timeAgo } from "@/lib/utils"
+import { getImageUrl, getInitials } from "@/lib/utils"
 import { getFriendsAction } from "@/lib/actions/friends"
-import { getFeedPosts, toggleLikePostAction, getPostCommentsAction, addPostCommentAction } from "@/lib/actions/feed"
-import { getStoryFeedAction, viewStoryAction, toggleStoryLikeAction, replyToStoryAction, deleteStoryAction } from "@/lib/actions/stories"
+import { getFeedPosts, getPostByIdAction, toggleLikePostAction, reactToPostAction } from "@/lib/actions/feed"
+import { getStoryFeedAction, viewStoryAction, toggleStoryLikeAction, reactToStoryAction, replyToStoryAction, deleteStoryAction } from "@/lib/actions/stories"
 import { getActiveAdsAction, AdDTO } from "@/lib/actions/ads"
 import AdCard from "@/components/feed/AdCard"
 import { FriendUser, UserStoryGroup, StoryItem } from "@/types"
@@ -30,16 +33,18 @@ const containerVariants: Variants = {
   show: { opacity: 1, transition: { staggerChildren: 0.08 } } 
 };
 
-export default function FeedClient({ initialPosts }: { initialPosts: any }) {
+export default function FeedClient({ initialPosts, initialHasMore = false }: { initialPosts: PostType[] | null | undefined; initialHasMore?: boolean }) {
   const { user } = useAuth();
   
-  const rawUsername = (user?.username || user?.email || 'creador').replace(/^@/, '').toLowerCase();
   const displayName = user?.name || user?.username || 'Creador Zentry';
+  const myAvatar = useMyAvatar();
 
-  const [posts, setPosts] = useState<PostType[]>([]);
+  // Las obras ya vienen renderizadas desde el servidor: no volver a pedirlas al montar
+  const initialList: PostType[] = Array.isArray(initialPosts) ? initialPosts : [];
+  const [posts, setPosts] = useState<PostType[]>(initialList);
   const [ads, setAds] = useState<AdDTO[]>([]);
   const [friends, setFriends] = useState<FriendUser[]>([]);
-  const [likedPosts, setLikedPosts] = useState<(string | number)[]>([]);
+  const [likedPosts, setLikedPosts] = useState<(string | number)[]>(() => initialList.filter(p => p.liked || p.myReaction).map(p => p.id));
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTag, setActiveTag] = useState("");
   const [activeTab, setActiveTab] = useState('Para ti');
@@ -53,12 +58,10 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   // Modales de Post y Comentarios
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [activeCommentPost, setActiveCommentPost] = useState<PostType | null>(null);
-  const [commentText, setCommentText] = useState("");
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   // 1. Cargar Posts Reales desde el Backend (más recientes primero)
   const [feedPage, setFeedPage] = useState(0);
-  const [hasMorePosts, setHasMorePosts] = useState(false);
+  const [hasMorePosts, setHasMorePosts] = useState(initialHasMore);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const loadPosts = async () => {
@@ -102,7 +105,7 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
 
   // Cargar Amigos, Posts e Historias
   useEffect(() => {
-    loadPosts();
+    if (initialList.length === 0) loadPosts();
     loadStories();
 
     async function loadFriends() {
@@ -120,6 +123,20 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       if (res.success) setAds(res.data);
     });
   }, [loadStories]);
+
+  // Abrir una obra directamente desde un enlace compartido o una notificación (/feed?post=ID)
+  useEffect(() => {
+    const postId = new URLSearchParams(window.location.search).get('post');
+    if (!postId) return;
+    getPostByIdAction(postId).then(res => {
+      if (res.success && res.data) {
+        setActiveCommentPost(res.data);
+        if (res.data.liked) setLikedPosts(prev => prev.includes(res.data!.id) ? prev : [...prev, res.data!.id]);
+      } else {
+        toast.error("Esta publicación ya no está disponible");
+      }
+    });
+  }, []);
 
   // Manejar cuando se ve una historia (marca cada ítem del grupo como visto en el backend)
   const handleStoryGroupViewed = (groupId: string | number) => {
@@ -146,7 +163,7 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       return {
         ...g,
         items: g.items.map(item => item.id === storyId
-          ? { ...item, liked, likes: liked ? item.likes + 1 : Math.max(0, item.likes - 1) }
+          ? { ...item, liked, myReaction: liked ? 'like' : null, likes: liked ? item.likes + 1 : Math.max(0, item.likes - 1) }
           : item)
       };
     }));
@@ -158,6 +175,25 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       applyLiked(wasLiked);
       toast.error("No se pudo reaccionar a la historia");
     }
+  };
+
+  // Reacción con emoji a una historia (se guarda y notifica al dueño)
+  const handleReactStory = async (storyId: string, groupId: string | number, type: string) => {
+    const res = await reactToStoryAction(storyId, type);
+    if (!res.success) {
+      toast.error("No se pudo reaccionar a la historia");
+      return;
+    }
+    setStoryGroups(prev => prev.map(g => g.id !== groupId ? g : {
+      ...g,
+      items: g.items.map(item => {
+        if (item.id !== storyId) return item;
+        const hadReaction = Boolean(item.myReaction ?? item.liked);
+        const hasReaction = Boolean(res.reaction);
+        const likes = item.likes + (hasReaction && !hadReaction ? 1 : !hasReaction && hadReaction ? -1 : 0);
+        return { ...item, myReaction: res.reaction ?? null, liked: hasReaction, likes: Math.max(0, likes) };
+      })
+    }));
   };
 
   // Manejar eliminación de historia
@@ -210,47 +246,46 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   };
 
   // 3. Manejo de Likes Dinámico (optimista, revertido si el backend falla)
-  const toggleLike = async (postId: string | number) => {
-    const isCurrentlyLiked = likedPosts.includes(postId);
+  // Reacción optimista: la UI cambia al instante y luego se reconcilia con el backend.
+  // type = null → botón "Me gusta" (quita la reacción actual o pone ❤️)
+  const applyReaction = async (postId: string | number, type: string | null) => {
+    const original = posts.find(p => p.id === postId)
+      ?? (activeCommentPost?.id === postId ? activeCommentPost : null);
+    if (!original) return;
 
-    setLikedPosts(prev =>
-      isCurrentlyLiked ? prev.filter(id => id !== postId) : [...prev, postId]
-    );
+    const withLiked = { ...original, liked: likedPosts.includes(postId) || original.liked };
+    const optimistic = applyReactionLocally(withLiked, type);
+    applyPostUpdate(optimistic);
+    setLikedPosts(prev => {
+      const without = prev.filter(id => id !== postId);
+      return optimistic.myReaction ? [...without, postId] : without;
+    });
 
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        return {
-          ...p,
-          likes: isCurrentlyLiked ? Math.max(0, p.likes - 1) : p.likes + 1
-        };
-      }
-      return p;
-    }));
-
-    const res = await toggleLikePostAction(postId);
-
-    if (!res.success) {
-      // Revertir el cambio optimista si el backend rechazó la reacción
-      setLikedPosts(prev =>
-        isCurrentlyLiked ? [...prev, postId] : prev.filter(id => id !== postId)
-      );
-      setPosts(prev => prev.map(p => {
-        if (p.id === postId) {
-          return {
-            ...p,
-            likes: isCurrentlyLiked ? p.likes + 1 : Math.max(0, p.likes - 1)
-          };
-        }
-        return p;
-      }));
-      toast.error(res.error || "No se pudo procesar tu reacción");
+    const res = type === null ? await toggleLikePostAction(postId) : await reactToPostAction(postId, type);
+    if (!res.success || !res.data) {
+      applyPostUpdate(original);
+      setLikedPosts(prev => {
+        const without = prev.filter(id => id !== postId);
+        return original.liked || original.myReaction ? [...without, postId] : without;
+      });
+      toast.error(res.error || "No se pudo registrar tu reacción");
       return;
     }
+    applyPostUpdate(res.data);
+  };
 
-    // Reconciliar con el valor real del backend
-    if (typeof res.likes === 'number') {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: res.likes as number } : p));
-    }
+  const toggleLike = (postId: string | number) => applyReaction(postId, null);
+  const handleReact = (postId: string | number, type: string) => applyReaction(postId, type);
+
+  // Mantiene la lista y el modal abierto sincronizados, conservando los comentarios ya cargados
+  const applyPostUpdate = (updated: PostType) => {
+    setPosts(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated, comments_list: p.comments_list } : p));
+    setActiveCommentPost(prev => prev && prev.id === updated.id ? { ...prev, ...updated, comments_list: prev.comments_list } : prev);
+  };
+
+  const handlePostDeleted = (postId: string | number) => {
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    setActiveCommentPost(prev => prev && prev.id === postId ? null : prev);
   };
 
   // 4. Compartir Obra
@@ -263,57 +298,8 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
   };
 
   // 5. Abrir Drawer de Comentarios y Cargar los Reales del Backend
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
-  const handleOpenComments = async (post: PostType) => {
-    setActiveCommentPost(post);
-    setIsLoadingComments(true);
-    const res = await getPostCommentsAction(post.id);
-    setIsLoadingComments(false);
-    if (res.success) {
-      setActiveCommentPost(prev => prev && prev.id === post.id ? { ...prev, comments_list: res.data } : prev);
-      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, comments_list: res.data } : p));
-    }
-  };
-
-  // 6. Enviar Comentario Real
-  const handleSendComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim() || !activeCommentPost) return;
-
-    setIsSubmittingComment(true);
-    const targetPostId = activeCommentPost.id;
-    const text = commentText.trim();
-
-    const res = await addPostCommentAction(targetPostId, text);
-    setIsSubmittingComment(false);
-
-    if (!res.success || !res.data) {
-      toast.error(res.error || "No se pudo publicar tu comentario");
-      return;
-    }
-
-    const newComment = res.data;
-
-    setPosts(prev => prev.map(p => {
-      if (p.id === targetPostId) {
-        return {
-          ...p,
-          comments: p.comments + 1,
-          comments_list: [newComment, ...(p.comments_list || [])]
-        };
-      }
-      return p;
-    }));
-
-    setActiveCommentPost(prev => prev ? {
-      ...prev,
-      comments: prev.comments + 1,
-      comments_list: [newComment, ...(prev.comments_list || [])]
-    } : null);
-
-    setCommentText("");
-    toast.success("💬 Comentario publicado");
-  };
+  // PostDetailModal carga los comentarios reales al abrirse (una sola petición)
+  const handleOpenComments = (post: PostType) => setActiveCommentPost(post);
 
   // 6. Filtrado de Publicaciones por Búsqueda, Tags y Pestañas Multimedia
   const filteredPosts = useMemo(() => {
@@ -378,8 +364,8 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
       <div className="bg-zentry-card border border-zentry-border rounded-3xl p-4 sm:p-5 shadow-sm mb-6 space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-purple-950/50 border border-purple-500/30 flex items-center justify-center font-black text-xs text-purple-300 shrink-0 overflow-hidden shadow-sm relative">
-            {user?.avatar_url ? (
-              <Image src={getImageUrl(user.avatar_url)} alt={displayName} fill sizes="40px" className="object-cover" />
+            {myAvatar ? (
+              <Image src={getImageUrl(myAvatar)} alt={displayName} fill sizes="40px" className="object-cover" />
             ) : (
               getInitials(displayName)
             )}
@@ -530,8 +516,11 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
                 post={post}
                 isLiked={likedPosts.includes(post.id)}
                 onLike={toggleLike}
+                onReact={handleReact}
                 onComment={handleOpenComments}
                 onShare={handleShare}
+                onPostUpdated={applyPostUpdate}
+                onPostDeleted={handlePostDeleted}
                 isListMode={layoutStyle === 'list'}
               />
               {ads.length > 0 && (idx + 1) % 3 === 0 && (
@@ -565,76 +554,25 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
         }}
       />
 
-      {/* 7. DRAWER / MODAL DE COMENTARIOS */}
-      <AnimatePresence>
-        {activeCommentPost && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-zentry-card border border-zentry-border rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
-            >
-              {/* Header Comentarios */}
-              <div className="p-4 border-b border-zentry-border flex justify-between items-center bg-zentry-bg">
-                <div>
-                  <h3 className="font-extrabold text-sm text-zentry-text-1">Comentarios</h3>
-                  <p className="text-[11px] text-zentry-text-2 truncate max-w-xs">{activeCommentPost.title}</p>
-                </div>
-                <button 
-                  onClick={() => setActiveCommentPost(null)}
-                  className="p-1.5 text-zentry-text-2 hover:text-zentry-text-1 rounded-xl"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Lista de Comentarios */}
-              <div className="p-4 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                {isLoadingComments ? (
-                  <div className="py-12 flex justify-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-zentry-text-2" />
-                  </div>
-                ) : (!activeCommentPost.comments_list || activeCommentPost.comments_list.length === 0) ? (
-                  <div className="py-12 text-center text-zentry-text-2 space-y-2">
-                    <MessageSquare className="w-8 h-8 mx-auto opacity-40" />
-                    <p className="text-xs font-bold text-zentry-text-1">Aún no hay comentarios</p>
-                    <p className="text-[11px]">¡Sé el primero en dejar una opinión a {activeCommentPost.author}!</p>
-                  </div>
-                ) : (
-                  activeCommentPost.comments_list.map(c => (
-                    <div key={c.id} className="p-3 bg-zentry-bg rounded-2xl border border-zentry-border/70 space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-extrabold text-zentry-text-1">{c.author}</span>
-                        <span className="text-[10px] text-zentry-text-2 font-mono">{timeAgo(c.time)}</span>
-                      </div>
-                      <p className="text-xs text-zentry-text-1 leading-relaxed">{c.text}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Formulario de Comentar */}
-              <form onSubmit={handleSendComment} className="p-3.5 border-t border-zentry-border bg-zentry-bg flex items-center gap-2">
-                <input 
-                  type="text"
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder={`Comentar como @${rawUsername}...`}
-                  className="flex-1 bg-zentry-card border border-zentry-border rounded-2xl py-2.5 px-4 text-xs sm:text-sm text-zentry-text-1 placeholder:text-zentry-text-2/60 focus:outline-none focus:border-zentry-accent transition-colors"
-                />
-                <button
-                  type="submit"
-                  disabled={!commentText.trim() || isSubmittingComment}
-                  className="p-2.5 bg-zentry-accent text-white rounded-2xl hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center shrink-0 cursor-pointer shadow-md"
-                >
-                  {isSubmittingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* 7. MODAL VENTANA EMERGENTE DE PUBLICACIÓN Y COMENTARIOS (ESTILO INSTAGRAM / X) */}
+      <PostDetailModal
+        post={activeCommentPost}
+        isOpen={Boolean(activeCommentPost)}
+        onClose={() => {
+          setActiveCommentPost(null);
+          // Limpiar ?post= para que recargar no vuelva a abrir el modal
+          if (window.location.search.includes('post=')) window.history.replaceState(null, '', '/feed');
+        }}
+        isLiked={activeCommentPost ? likedPosts.includes(activeCommentPost.id) : false}
+        onLike={toggleLike}
+        onShare={handleShare}
+        onReact={handleReact}
+        onPostUpdated={applyPostUpdate}
+        onPostDeleted={handlePostDeleted}
+        onCommentCountChange={(postId, newCount) => {
+          setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments: newCount } : p))
+        }}
+      />
 
       {/* 8. MODAL DE CREAR HISTORIA 9:16 (Estilo Instagram) */}
       <CreateStoryModal
@@ -654,6 +592,7 @@ export default function FeedClient({ initialPosts }: { initialPosts: any }) {
           onClose={() => setActiveViewerGroupIndex(null)}
           onStoryGroupViewed={handleStoryGroupViewed}
           onLikeStory={handleLikeStory}
+          onReactStory={handleReactStory}
           onSendReply={handleReplyToStory}
           onDeleteStory={handleDeleteStory}
           currentUserId={user?.id}
