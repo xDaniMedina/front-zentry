@@ -136,8 +136,8 @@ export default function ReactionButton({ myReaction, onToggle, onReact, classNam
         onContextMenu={(e) => { e.preventDefault(); setOpen(true) }}
         aria-label={reacted ? `Quitar reacción (${reactionLabel(myReaction)})` : "Me gusta (mantén para más reacciones)"}
         className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-90 select-none hover:bg-zentry-bg",
-          reacted ? reactionColorClass(myReaction) : "text-zentry-text-2 hover:text-zentry-text-1"
+          "flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-90 select-none shrink-0 whitespace-nowrap",
+          reacted ? reactionColorClass(myReaction) : "text-zentry-text-2 hover:text-rose-500 hover:bg-rose-500/10"
         )}
       >
         {reacted ? (

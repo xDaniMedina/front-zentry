@@ -268,6 +268,12 @@ function PostsGrid({ state, loading, empty, wide }: { state: ReturnType<typeof u
             onLike={state.toggleLike}
             onReact={state.reactTo}
             onComment={state.openPost}
+            onShare={(p) => {
+              if (typeof window !== "undefined") {
+                navigator.clipboard.writeText(`${window.location.origin}/feed?post=${p.id}`);
+                toast.success("Enlace copiado al portapapeles");
+              }
+            }}
             onPostUpdated={state.applyPostUpdate}
             onPostDeleted={state.removePost}
           />

@@ -567,8 +567,8 @@ export function FeedCard({
       )}
 
       {/* 4. Barra de Acciones e Interacciones */}
-      <div className="px-4 py-3 border-t border-zentry-border/50 bg-zentry-card rounded-b-3xl flex items-center justify-between">
-        <div className="flex items-center gap-1 sm:gap-4">
+      <div className="px-3 sm:px-4 py-2.5 border-t border-zentry-border/50 bg-zentry-card rounded-b-3xl flex items-center justify-between gap-1 sm:gap-2 select-none">
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
           {/* Reacciones (clic = me gusta, mantener = selector de emojis) */}
           <ReactionButton
             myReaction={post.myReaction ?? (isLiked ? 'like' : null)}
@@ -578,20 +578,29 @@ export function FeedCard({
 
           {/* Comentarios */}
           <button 
+            type="button"
             onClick={() => onComment?.(post)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-zentry-text-2 hover:text-purple-400 hover:bg-purple-500/10 transition-all cursor-pointer active:scale-95 shrink-0"
+            title="Comentarios"
           >
             <MessageSquare className="w-4 h-4" />
             <span className="hidden sm:inline">Comentar</span>
+            {post.comments > 0 && (
+              <span className="text-[11px] font-extrabold text-purple-400/90 ml-0.5">
+                {post.comments}
+              </span>
+            )}
           </button>
 
           {/* Compartir */}
           <button 
+            type="button"
             onClick={() => {
               if (onShare) onShare(post);
               else handleCopyLink();
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-zentry-text-2 hover:text-zentry-text-1 hover:bg-zentry-bg transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-zentry-text-2 hover:text-sky-400 hover:bg-sky-500/10 transition-all cursor-pointer active:scale-95 shrink-0"
+            title="Compartir publicación"
           >
             <Share2 className="w-4 h-4" />
             <span className="hidden sm:inline">Compartir</span>
@@ -600,15 +609,17 @@ export function FeedCard({
 
         {/* Guardar Post */}
         <button 
+          type="button"
           onClick={handleToggleSave}
-          className={`p-2 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-90 ${
+          className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-90 shrink-0 ${
             isSaved 
-              ? 'text-amber-400 bg-amber-500/10' 
-              : 'text-zentry-text-2 hover:text-amber-400 hover:bg-zentry-bg'
+              ? 'text-amber-400 bg-amber-500/15 border border-amber-500/30 shadow-sm shadow-amber-500/10' 
+              : 'text-zentry-text-2 hover:text-amber-400 hover:bg-amber-500/10'
           }`}
           title={isSaved ? "Guardado en tu perfil" : "Guardar en tu perfil"}
         >
-          <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
+          <Bookmark className={`w-4 h-4 transition-transform duration-200 ${isSaved ? 'fill-amber-400 text-amber-400 scale-105' : ''}`} />
+          <span className="hidden md:inline">{isSaved ? "Guardado" : "Guardar"}</span>
         </button>
       </div>
 
